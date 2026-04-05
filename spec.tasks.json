@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:01:34.459166Z",
+  "updated_at": "2026-04-05T15:01:34.499006Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -316,7 +316,7 @@
       "id": "cmd-root",
       "title": "Root cobra command with global flags",
       "description": "Set up cobra root command with manifest/concurrency/no-color flags",
-      "status": "wip",
+      "status": "done",
       "depends_on": [
         "init-project"
       ],
@@ -325,10 +325,10 @@
       "source_sections": null,
       "source_lines": "83-100,413-431,491-495",
       "started_at": "2026-04-05T14:59:54.301285Z",
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "closed_at": "2026-04-05T15:01:34.499001Z",
+      "closed_reason": "Root cobra command 'rp' with PersistentFlags: --manifest/-m default ~/.config/rp/manifest.yaml with RP_MANIFEST env, --concurrency/-c default 4 (\u003e=1) with RP_CONCURRENCY env (invalid ignored), --no-color with NO_COLOR env. CLI \u003e env \u003e defaults precedence in PersistentPreRunE. Tilde expansion via os.UserHomeDir.",
+      "gate_passed_at": "2026-04-05T15:01:34.499001Z",
+      "commit_sha": "29c595a"
     },
     {
       "id": "cmd-bootstrap",
