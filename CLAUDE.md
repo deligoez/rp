@@ -82,16 +82,18 @@ cmd/                      Cobra commands
   list.go                 Repo listing (human + JSON paths)
   manifest_init.go        Dir scan + manifest generation
   up.go                   Composite bootstrap+sync+deps
+  check.go                Boolean exit code, zero output
+  diff.go                 Latest commit per repo, --since filter
   json_test.go            JSON integration tests (subprocess)
 internal/
   manifest/
     manifest.go           YAML parsing via yaml.Node, validation, path resolution
     filter.go             FilterRepos, FilterOwners
-    manifest_test.go      19 unit tests
-    filter_test.go        5 filter tests
+    manifest_test.go      25 unit tests (19 spec + 6 QA regression)
+    filter_test.go        9 filter tests (5 spec + 4 QA regression)
   git/
     git.go                Clone, Pull, Status, LastCommitDate, IsRepo
-    git_test.go           13 unit tests
+    git_test.go           17 unit tests (13 spec + 4 QA regression)
   deps/
     deps.go               RunDeps via sh -c
     deps_test.go          7 unit tests
@@ -126,23 +128,22 @@ Location: `~/.config/rp/manifest.yaml`
 base_dir: ~/Developer
 
 owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
+  acme:
+    services:
+      - repo: acme/api
         deps:
           - go mod download
-      - repo: deligoez/blog
+      - repo: acme/web
         deps:
-          - composer install
           - npm install
     archive:
-      - repo: deligoez/roast
-  phonyland:
+      - repo: acme/legacy-app
+  opensource:
     flat: true
     repos:
-      - repo: phonyland/cloud
+      - repo: opensource/design-system
     archive:
-      - repo: phonyland/framework
+      - repo: opensource/old-website
 ```
 
 ### Path Rules
@@ -181,11 +182,11 @@ Every command supports `--json`. Two result types:
 
 ## Testing
 
-72 tests across 5 test files:
-- `internal/manifest`: 19 parsing/validation tests + 5 filter tests
-- `internal/git`: 13 git operation tests (use temp repos)
+~100 tests across 5 test files:
+- `internal/manifest`: 25 parsing/validation + 9 filter tests
+- `internal/git`: 17 git operation tests (use temp repos)
 - `internal/deps`: 7 command execution tests
 - `internal/output`: 8 JSON serialization tests
-- `cmd`: 20 end-to-end JSON integration tests (subprocess)
+- `cmd`: ~40 end-to-end integration tests (subprocess: JSON output, check, diff, deps dry-run, sync errors, hints, QA regressions)
 
-Git tests create real temp repos with `git init`, commits, and bare repos for clone/pull testing. JSON integration tests build the binary and run it as a subprocess.
+Git tests create real temp repos with `git init`, commits, and bare repos for clone/pull testing. Integration tests build the binary and run it as a subprocess.

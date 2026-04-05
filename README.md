@@ -150,6 +150,7 @@ Run dependency install commands defined in the manifest.
 ```bash
 rp deps                          # all repos with deps
 rp deps vendor/payments          # specific repo
+rp deps --dry-run                # preview what would run
 ```
 
 Commands are defined per repo in the manifest (`deps:` field) and run via `sh -c`.
