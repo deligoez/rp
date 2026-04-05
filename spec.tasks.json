@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:01:34.499006Z",
+  "updated_at": "2026-04-05T15:05:48.040023Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -63,7 +63,7 @@
       "id": "manifest-structs",
       "title": "Manifest struct definitions",
       "description": "Define Manifest, OwnerGroup, RepoEntry types",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "init-project"
       ],
@@ -71,11 +71,11 @@
       "acceptance": "- RepoEntry struct: Repo, Owner, Category, LocalPath, CloneURL, IsArchive, IsFlat, Deps []string\n- OwnerGroup struct: Name string, IsFlat bool, Repos []RepoEntry\n- Manifest struct: BaseDir string, owners data\n- Manifest.Repos() []RepoEntry placeholder\n- Manifest.Owners() []OwnerGroup placeholder",
       "source_sections": null,
       "source_lines": "17-33,365-371",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:05:47.991941Z",
+      "closed_at": "2026-04-05T15:05:48.040019Z",
+      "closed_reason": "RepoEntry struct with Repo, Owner, Category, LocalPath, CloneURL, IsArchive, IsFlat, Deps []string. OwnerGroup struct with Name, IsFlat, Repos. Manifest struct with BaseDir and private owners. Repos() returns flat list iterating owners. Owners() returns m.owners slice.",
+      "gate_passed_at": "2026-04-05T15:05:48.040019Z",
+      "commit_sha": "275a4e1"
     },
     {
       "id": "manifest-yaml-parsing",
