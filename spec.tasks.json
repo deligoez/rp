@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:09:25.349688Z",
+  "updated_at": "2026-04-05T15:12:48.059229Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -334,7 +334,7 @@
       "id": "cmd-bootstrap",
       "title": "Bootstrap command implementation",
       "description": "Clone missing repos in parallel with dry-run",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "git-clone-isrepo",
@@ -345,11 +345,11 @@
       "acceptance": "- Loads manifest, clones missing repos via worker pool\n- Skips existing git repos, errors on non-git-dir\n- Creates parent dirs with os.MkdirAll 0755\n- Output grouped by owner, summary line\n- --dry-run exits 0\n- Exit 0 or 2",
       "source_sections": null,
       "source_lines": "102-135",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:48.010041Z",
+      "closed_at": "2026-04-05T15:12:48.059223Z",
+      "closed_reason": "Bootstrap command: loads manifest, clones missing repos via worker pool with 'cloning' verb. Checks existing path (git repo=skip, non-git=error, missing=clone with MkdirAll 0755). Output grouped by owner with label convention. Summary line. --dry-run exits 0. Exit 0 or 2.",
+      "gate_passed_at": "2026-04-05T15:12:48.059223Z",
+      "commit_sha": "91cf3b8"
     },
     {
       "id": "cmd-sync",
