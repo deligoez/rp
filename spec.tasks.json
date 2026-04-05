@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:48.137895Z",
+  "updated_at": "2026-04-05T15:12:48.176833Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -399,7 +399,7 @@
       "id": "cmd-deps",
       "title": "Deps command implementation",
       "description": "Run manifest deps for all or filtered repos",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "deps-package",
@@ -410,11 +410,11 @@
       "acceptance": "- No args = all repos with deps; filter = exact match\n- Filter not found = exit 2; match but no deps = message + exit 0\n- Sequential commands per repo, parallel repos\n- Output per command, summary\n- Exit 0 or 2",
       "source_sections": null,
       "source_lines": "235-264",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:48.142423Z",
+      "closed_at": "2026-04-05T15:12:48.176829Z",
+      "closed_reason": "Deps command: no args=all repos with deps, filter=exact match. Filter not found=exit 2, match no deps=message+exit 0. Sequential per repo, parallel repos via worker pool with 'installing' verb. Output per command. Summary N succeeded/failed. Exit 0 or 2.",
+      "gate_passed_at": "2026-04-05T15:12:48.176829Z",
+      "commit_sha": "f2b0395"
     },
     {
       "id": "cmd-archive",
