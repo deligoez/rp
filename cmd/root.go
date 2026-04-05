@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is set at build time via ldflags.
+var Version = "dev"
+
 // Exported package-level variables so subcommands can read the resolved values.
 var (
 	ManifestPath string
@@ -23,6 +26,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:           "rp",
+	Version:       Version,
 	Short:         "Repo manager CLI — organize, sync, and bootstrap your Developer workspace",
 	SilenceErrors: true,
 	SilenceUsage:  true,
