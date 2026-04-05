@@ -118,7 +118,7 @@ var bootstrapCmd = &cobra.Command{
 
 		// 3. Print output grouped by owner in manifest order.
 		var cloned, existed, failed int
-		for _, ownerGroup := range m.Owners() {
+		for _, ownerGroup := range manifest.FilterOwners(m.Owners(), Filters) {
 			fmt.Println(ownerGroup.Name)
 			for _, entry := range ownerGroup.Repos {
 				res := resultMap[entry.LocalPath]
@@ -140,9 +140,9 @@ var bootstrapCmd = &cobra.Command{
 		// 4. Summary.
 		fmt.Println()
 		fmt.Println(ui.SummaryLine(fmt.Sprintf("%s, %s, %s",
-			ui.Plural(cloned, "cloned"),
+			fmt.Sprintf("%d cloned", cloned),
 			pluralExisted(existed),
-			ui.Plural(failed, "failed"),
+			fmt.Sprintf("%d failed", failed),
 		)))
 
 		if failed > 0 {
@@ -160,7 +160,7 @@ func runBootstrapDryRun(m *manifest.Manifest, filteredRepos []manifest.RepoEntry
 		included[r.LocalPath] = true
 	}
 
-	for _, ownerGroup := range m.Owners() {
+	for _, ownerGroup := range manifest.FilterOwners(m.Owners(), Filters) {
 		fmt.Println(ownerGroup.Name)
 		for _, entry := range ownerGroup.Repos {
 			if !included[entry.LocalPath] {
