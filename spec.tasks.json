@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T14:59:54.301286Z",
+  "updated_at": "2026-04-05T15:01:25.265028Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -154,7 +154,7 @@
       "id": "git-clone-isrepo",
       "title": "Git Clone/IsRepo functions",
       "description": "Implement Clone and IsRepo by shelling out to git",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "init-project"
       ],
@@ -162,11 +162,11 @@
       "acceptance": "- Clone(url, path) shells out to git clone\n- IsRepo(path) checks for .git directory\n- Tests #1, #2, #5 pass (IsRepo git dir, IsRepo non-git, Clone)",
       "source_sections": null,
       "source_lines": "378-385",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:01:25.215258Z",
+      "closed_at": "2026-04-05T15:01:25.265021Z",
+      "closed_reason": "Clone and IsRepo implemented, ErrDiverged/ErrNoUpstream/PullResult/RepoStatus types defined. Tests #1,#2,#5 pass.",
+      "gate_passed_at": "2026-04-05T15:01:25.265021Z",
+      "commit_sha": "21b4f05"
     },
     {
       "id": "git-status",
