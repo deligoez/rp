@@ -561,3 +561,110 @@ owners:
 		t.Fatal("expected error for empty string in deps, got nil")
 	}
 }
+
+// --- QA Regression Tests ---
+
+// QA-R1: Empty manifest file should fail with base_dir hint
+func TestQA_EmptyManifestFile(t *testing.T) {
+	path := writeManifest(t, "")
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for empty manifest")
+	}
+	if !strings.Contains(err.Error(), "base_dir") {
+		t.Errorf("error should mention base_dir: %v", err)
+	}
+}
+
+// QA-R2: Manifest with only base_dir, no owners
+func TestQA_NoOwners(t *testing.T) {
+	path := writeManifest(t, "base_dir: /tmp/test\n")
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for no owners")
+	}
+	if !strings.Contains(err.Error(), "at least one owner") {
+		t.Errorf("error should mention owners: %v", err)
+	}
+}
+
+// QA-R3: flat: 42 (non-boolean) should fail with tag check
+func TestQA_FlatNonBoolInt(t *testing.T) {
+	content := `
+base_dir: /tmp/test
+owners:
+  owner1:
+    flat: 42
+    repos:
+      - repo: test/repo
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for flat: 42")
+	}
+	if !strings.Contains(err.Error(), "boolean") {
+		t.Errorf("error should mention boolean: %v", err)
+	}
+}
+
+// QA-R4: flat as a sequence (reserved key collision)
+func TestQA_FlatAsSequence(t *testing.T) {
+	content := `
+base_dir: /tmp/test
+owners:
+  owner1:
+    flat:
+      - repo: test/repo
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for flat as sequence")
+	}
+}
+
+// QA-R5: Empty category list should fail
+func TestQA_EmptyCategoryList(t *testing.T) {
+	content := `
+base_dir: /tmp/test
+owners:
+  owner1:
+    projects: []
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for empty category list")
+	}
+	if !strings.Contains(err.Error(), "empty repo list") {
+		t.Errorf("error should mention empty repo list: %v", err)
+	}
+}
+
+// QA-R6: Cross-owner repo path uses manifest owner, not github owner
+func TestQA_CrossOwnerPath(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+owners:
+  myteam:
+    libs:
+      - repo: spf13/cobra
+`
+	path := writeManifest(t, content)
+	m, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	r := m.Repos()[0]
+	if !strings.Contains(r.LocalPath, "myteam") {
+		t.Errorf("path should contain manifest owner 'myteam': %s", r.LocalPath)
+	}
+	if strings.Contains(r.LocalPath, "spf13") {
+		t.Errorf("path should NOT contain github owner 'spf13': %s", r.LocalPath)
+	}
+	if r.CloneURL != "git@github.com:spf13/cobra.git" {
+		t.Errorf("clone URL should use github owner: %s", r.CloneURL)
+	}
+}
