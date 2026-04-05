@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T14:59:01.290572Z",
+  "updated_at": "2026-04-05T14:59:54.301286Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -47,17 +47,17 @@
       "id": "init-project",
       "title": "Initialize Go project structure",
       "description": "Set up go.mod, main.go, directory structure",
-      "status": "wip",
+      "status": "done",
       "depends_on": [],
       "estimate_minutes": 5,
       "acceptance": "- go.mod exists with module github.com/deligoez/rp and Go 1.24+\n- main.go exists and calls cmd.Execute()\n- Directories exist: cmd/, internal/manifest/, internal/git/, internal/deps/, internal/ui/\n- go build ./... succeeds\n- cobra dependency added to go.mod",
       "source_sections": null,
       "source_lines": "1-11",
       "started_at": "2026-04-05T14:59:01.290572Z",
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "closed_at": "2026-04-05T14:59:45.437867Z",
+      "closed_reason": "Go project initialized: go.mod (Go 1.25.6), main.go calling cmd.Execute(), cobra dependency, all 5 directories created (cmd/, internal/manifest/, internal/git/, internal/deps/, internal/ui/), go build succeeds",
+      "gate_passed_at": "2026-04-05T14:59:45.437867Z",
+      "commit_sha": "88aa14a"
     },
     {
       "id": "manifest-structs",
@@ -316,7 +316,7 @@
       "id": "cmd-root",
       "title": "Root cobra command with global flags",
       "description": "Set up cobra root command with manifest/concurrency/no-color flags",
-      "status": "open",
+      "status": "wip",
       "depends_on": [
         "init-project"
       ],
@@ -324,7 +324,7 @@
       "acceptance": "- Root command 'rp' with cobra\n- --manifest/-m default ~/.config/rp/manifest.yaml, RP_MANIFEST env\n- --concurrency/-c default 4 (\u003e=1), RP_CONCURRENCY env (invalid ignored)\n- --no-color + NO_COLOR env var\n- CLI flags \u003e env vars \u003e defaults",
       "source_sections": null,
       "source_lines": "83-100,413-431,491-495",
-      "started_at": null,
+      "started_at": "2026-04-05T14:59:54.301285Z",
       "closed_at": null,
       "closed_reason": null,
       "gate_passed_at": null,
