@@ -1,0 +1,280 @@
+{
+  "spec": "spec.md",
+  "workflow": {
+    "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp && go build ./... && go test ./... && go vet ./..."
+  },
+  "tasks": [
+    {
+      "id": "init-project",
+      "title": "Initialize Go project structure",
+      "description": "Set up go.mod, main.go, directory structure",
+      "source_lines": "1-11",
+      "estimate_minutes": 5,
+      "depends_on": [],
+      "acceptance": "- go.mod exists with module github.com/deligoez/rp and Go 1.24+\n- main.go exists and calls cmd.Execute()\n- Directories exist: cmd/, internal/manifest/, internal/git/, internal/deps/, internal/ui/\n- go build ./... succeeds\n- cobra dependency added to go.mod"
+    },
+    {
+      "id": "manifest-structs",
+      "title": "Manifest struct definitions",
+      "description": "Define Manifest, OwnerGroup, RepoEntry types",
+      "source_lines": "17-33,365-371",
+      "estimate_minutes": 8,
+      "depends_on": [
+        "init-project"
+      ],
+      "acceptance": "- RepoEntry struct: Repo, Owner, Category, LocalPath, CloneURL, IsArchive, IsFlat, Deps []string\n- OwnerGroup struct: Name string, IsFlat bool, Repos []RepoEntry\n- Manifest struct: BaseDir string, owners data\n- Manifest.Repos() []RepoEntry placeholder\n- Manifest.Owners() []OwnerGroup placeholder"
+    },
+    {
+      "id": "manifest-yaml-parsing",
+      "title": "Manifest YAML parsing via yaml.Node",
+      "description": "Custom UnmarshalYAML with yaml.Node for order-preserving owner/category parsing",
+      "source_lines": "35-45,372-377",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-structs"
+      ],
+      "acceptance": "- Custom UnmarshalYAML reads flat as bool, archive as []RepoEntry with IsArchive:true, remaining keys as categories\n- Uses yaml.Node for iteration to preserve YAML document order\n- Manifest.Repos() returns flat list in YAML document order\n- Manifest.Owners() returns []OwnerGroup in manifest order"
+    },
+    {
+      "id": "manifest-path-resolution",
+      "title": "Manifest path resolution logic",
+      "description": "Implement tilde expansion and directory mapping rules for all 4 modes",
+      "source_lines": "47-68",
+      "estimate_minutes": 10,
+      "depends_on": [
+        "manifest-structs"
+      ],
+      "acceptance": "- Tilde expansion in base_dir\n- Categorized: {base_dir}/{owner}/{category}/{repo_name}\n- Flat: {base_dir}/{owner}/{repo_name}\n- Archive categorized: {base_dir}/{owner}/archive/{repo_name}\n- Archive flat: {base_dir}/{owner}/archive/{repo_name}\n- CloneURL = git@github.com:{repo}.git\n- repo_name is substring after / in repo field"
+    },
+    {
+      "id": "manifest-validation",
+      "title": "Manifest validation rules",
+      "description": "Implement all 8 validation rules from spec 2.4",
+      "source_lines": "70-79",
+      "estimate_minutes": 12,
+      "depends_on": [
+        "manifest-yaml-parsing",
+        "manifest-path-resolution"
+      ],
+      "acceptance": "- base_dir required and non-empty\n- repo format: exactly one /, alphanumeric+hyphens+underscores+dots\n- No duplicate repos across entire manifest\n- Owner/category names: non-empty, no /, no .., no null bytes\n- At least one owner with at least one repo\n- flat/archive reserved as category names; flat must be boolean\n- deps values must be non-empty strings\n- Categories must have non-empty repo lists"
+    },
+    {
+      "id": "manifest-load",
+      "title": "Manifest Load function with tests",
+      "description": "Wire up Load(path) and write all 19 manifest tests",
+      "source_lines": "365-368,437-459",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-validation"
+      ],
+      "acceptance": "- Load(path string) (*Manifest, error) reads file, parses YAML, validates, expands tilde\n- All 19 manifest tests pass (spec 7.1 #1-#19)"
+    },
+    {
+      "id": "git-clone-isrepo",
+      "title": "Git Clone/IsRepo functions",
+      "description": "Implement Clone and IsRepo by shelling out to git",
+      "source_lines": "378-385",
+      "estimate_minutes": 8,
+      "depends_on": [
+        "init-project"
+      ],
+      "acceptance": "- Clone(url, path) shells out to git clone\n- IsRepo(path) checks for .git directory\n- Tests #1, #2, #5 pass (IsRepo git dir, IsRepo non-git, Clone)"
+    },
+    {
+      "id": "git-status",
+      "title": "Git Status function",
+      "description": "Implement Status with dirty count, branch, ahead/behind, detached HEAD fallback",
+      "source_lines": "383-389,461-477",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "git-clone-isrepo"
+      ],
+      "acceptance": "- Status(path) returns RepoStatus{Clean, DirtyFiles, Branch, Ahead, Behind, HasUpstream}\n- Uses git status --porcelain for dirty count (all lines)\n- Branch via git symbolic-ref --short HEAD, fallback to git rev-parse --short HEAD on detached HEAD\n- Ahead/behind via git rev-list --left-right --count; HasUpstream=false with Ahead=0 Behind=0 when no tracking\n- Tests #3, #4, #7, #11, #12, #13 pass"
+    },
+    {
+      "id": "git-pull",
+      "title": "Git Pull function with typed errors",
+      "description": "Implement Pull with PullResult, ErrDiverged, ErrNoUpstream",
+      "source_lines": "382-387,461-477",
+      "estimate_minutes": 12,
+      "depends_on": [
+        "git-clone-isrepo"
+      ],
+      "acceptance": "- Pull(path) returns PullResult{NewCommits, AlreadyUpToDate}\n- Records HEAD via rev-parse before, counts via rev-list after\n- Returns ErrDiverged on ff-only failure, ErrNoUpstream when no tracking branch\n- On error PullResult is zero-valued\n- Tests #8, #9, #10 pass"
+    },
+    {
+      "id": "git-last-commit",
+      "title": "Git LastCommitDate function",
+      "description": "Implement LastCommitDate using git log",
+      "source_lines": "384-385",
+      "estimate_minutes": 5,
+      "depends_on": [
+        "git-clone-isrepo"
+      ],
+      "acceptance": "- LastCommitDate(path) returns time.Time via git log -1 --format=%cI\n- Test #6 passes"
+    },
+    {
+      "id": "deps-package",
+      "title": "Deps RunDeps function with tests",
+      "description": "Implement RunDeps via sh -c with exec.Cmd.Dir",
+      "source_lines": "392-394,479-489",
+      "estimate_minutes": 10,
+      "depends_on": [
+        "init-project"
+      ],
+      "acceptance": "- RunDeps(path, commands) runs each command via sh -c with exec.Cmd.Dir\n- Stops on first failure with command name and stderr in error\n- Empty list is no-op\n- All 7 deps tests pass (spec 7.3 #1-#7)"
+    },
+    {
+      "id": "ui-symbols",
+      "title": "UI status symbols with lipgloss",
+      "description": "Implement OK/!!/XX symbols with color support",
+      "source_lines": "396-399",
+      "estimate_minutes": 8,
+      "depends_on": [
+        "init-project"
+      ],
+      "acceptance": "- OK (green), !! (yellow), XX (red) using lipgloss\n- NO_COLOR env var and --no-color flag disable styles\n- Symbols are exported constants/functions"
+    },
+    {
+      "id": "ui-formatting",
+      "title": "UI formatting helpers",
+      "description": "Implement plural, aligned output, summary line formatting",
+      "source_lines": "400-402",
+      "estimate_minutes": 8,
+      "depends_on": [
+        "ui-symbols"
+      ],
+      "acceptance": "- Plural helper: '1 commit' vs '3 commits', '1 file' vs '3 files'\n- Aligned output helper for repo label + status columns\n- Summary line formatting (-- Summary -- with counts)"
+    },
+    {
+      "id": "worker-pool",
+      "title": "Worker pool with buffered output",
+      "description": "Concurrent worker pool that buffers results per worker",
+      "source_lines": "404-409",
+      "estimate_minutes": 12,
+      "depends_on": [
+        "ui-formatting"
+      ],
+      "acceptance": "- Configurable concurrency\n- Each worker processes one repo, buffers result into struct\n- Results printed in manifest order after all complete\n- Errors in one worker don't stop others"
+    },
+    {
+      "id": "worker-pool-progress",
+      "title": "Worker pool stderr progress line",
+      "description": "Add progress indicator on stderr with TTY detection",
+      "source_lines": "410-411",
+      "estimate_minutes": 8,
+      "depends_on": [
+        "worker-pool"
+      ],
+      "acceptance": "- Progress line on stderr: [N/total] {verb}... overwritten with carriage return\n- Verb configurable per command (cloning/syncing/installing)\n- Suppressed on non-TTY stderr"
+    },
+    {
+      "id": "cmd-root",
+      "title": "Root cobra command with global flags",
+      "description": "Set up cobra root command with manifest/concurrency/no-color flags",
+      "source_lines": "83-100,413-431,491-495",
+      "estimate_minutes": 10,
+      "depends_on": [
+        "init-project"
+      ],
+      "acceptance": "- Root command 'rp' with cobra\n- --manifest/-m default ~/.config/rp/manifest.yaml, RP_MANIFEST env\n- --concurrency/-c default 4 (>=1), RP_CONCURRENCY env (invalid ignored)\n- --no-color + NO_COLOR env var\n- CLI flags > env vars > defaults"
+    },
+    {
+      "id": "cmd-bootstrap",
+      "title": "Bootstrap command implementation",
+      "description": "Clone missing repos in parallel with dry-run",
+      "source_lines": "102-135",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-load",
+        "git-clone-isrepo",
+        "worker-pool",
+        "cmd-root"
+      ],
+      "acceptance": "- Loads manifest, clones missing repos via worker pool\n- Skips existing git repos, errors on non-git-dir\n- Creates parent dirs with os.MkdirAll 0755\n- Output grouped by owner, summary line\n- --dry-run exits 0\n- Exit 0 or 2"
+    },
+    {
+      "id": "cmd-sync",
+      "title": "Sync command implementation",
+      "description": "Pull clean repos, skip dirty/unpushed, clone missing",
+      "source_lines": "137-189",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-load",
+        "git-status",
+        "git-pull",
+        "git-clone-isrepo",
+        "worker-pool",
+        "cmd-root"
+      ],
+      "acceptance": "- Behavior order: not-cloned->clone, non-git->error, dirty->skip, unpushed(if upstream)->skip, clean->pull\n- Distinguishes ErrDiverged/ErrNoUpstream/generic via errors.Is()\n- Workers continue on clone failure\n- --dry-run shows would-do format\n- Exit 0/1/2 highest-wins"
+    },
+    {
+      "id": "cmd-status",
+      "title": "Status command implementation",
+      "description": "Show repo states grouped by owner with colors",
+      "source_lines": "191-233",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-load",
+        "git-status",
+        "ui-formatting",
+        "cmd-root"
+      ],
+      "acceptance": "- Shows clean/dirty/branch/ahead/behind per repo\n- Detached HEAD shows short SHA\n- Format: {label} {symbol} {branch} [{~N dirty} {+N ahead} {-N behind}]\n- Color: OK=green, !!=yellow, XX=red\n- Summary line\n- Exit 0 or 1"
+    },
+    {
+      "id": "cmd-deps",
+      "title": "Deps command implementation",
+      "description": "Run manifest deps for all or filtered repos",
+      "source_lines": "235-264",
+      "estimate_minutes": 12,
+      "depends_on": [
+        "manifest-load",
+        "deps-package",
+        "worker-pool",
+        "cmd-root"
+      ],
+      "acceptance": "- No args = all repos with deps; filter = exact match\n- Filter not found = exit 2; match but no deps = message + exit 0\n- Sequential commands per repo, parallel repos\n- Output per command, summary\n- Exit 0 or 2"
+    },
+    {
+      "id": "cmd-archive",
+      "title": "Archive command implementation",
+      "description": "Report stale repos based on commit date threshold",
+      "source_lines": "266-296",
+      "estimate_minutes": 10,
+      "depends_on": [
+        "manifest-load",
+        "git-last-commit",
+        "ui-formatting",
+        "cmd-root"
+      ],
+      "acceptance": "- Scans non-archive repos on disk\n- Stale if today - commit_date >= threshold\n- Dynamic threshold in header\n- Suggestion includes manifest edit reminder\n- Always exits 0"
+    },
+    {
+      "id": "cmd-list",
+      "title": "List command implementation",
+      "description": "Hierarchical repo listing with --missing filter",
+      "source_lines": "298-327",
+      "estimate_minutes": 12,
+      "depends_on": [
+        "manifest-load",
+        "ui-formatting",
+        "cmd-root"
+      ],
+      "acceptance": "- Category sub-headers with bare repo names\n- Flat owners: repos at category-header indent level\n- Shows path and OK/XX missing\n- --missing omits fully-cloned groups\n- Summary: N total, N missing\n- Exit 0 or 1"
+    },
+    {
+      "id": "cmd-manifest-init",
+      "title": "Manifest init command implementation",
+      "description": "Scan directory tree, generate manifest YAML",
+      "source_lines": "329-361",
+      "estimate_minutes": 15,
+      "depends_on": [
+        "manifest-structs",
+        "cmd-root"
+      ],
+      "acceptance": "- Walks max depth 4, skips .git dirs and symlinks\n- Parses SSH/HTTPS GitHub URLs (with/without .git)\n- Skips non-GitHub, reports to stderr\n- Infers flat/categorized per owner; mixed -> repos fallback + warning\n- --output existing file = abort\n- --dry-run shows discovered repos\n- Exit 0 or 2"
+    }
+  ]
+}
