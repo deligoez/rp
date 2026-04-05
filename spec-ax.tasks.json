@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.455019Z",
+  "updated_at": "2026-04-05T16:04:24.494029Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -280,7 +280,7 @@
       "id": "manifest-init-json",
       "title": "Manifest init command JSON output path",
       "description": "Add JSON output to manifest init",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags"
       ],
@@ -288,11 +288,11 @@
       "acceptance": "- --json outputs SuccessResult with discovered/skipped counts\n- Repos have inferred_owner, inferred_layout, inferred_category\n- No manifest_yaml field in JSON (per spec)\n- --dry-run in JSON: dry_run:true, same repo structure\n- Exit 0 or 2",
       "source_sections": null,
       "source_lines": "274-298",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.459685Z",
+      "closed_at": "2026-04-05T16:04:24.494022Z",
+      "closed_reason": "Manifest init JSON: SuccessResult with discovered/skipped. Repos have inferred_owner/inferred_layout/inferred_category via resolveLayouts. No manifest_yaml in JSON output. Dry-run dry_run:true. YAML written to --output file separately.",
+      "gate_passed_at": "2026-04-05T16:04:24.494022Z",
+      "commit_sha": "aa8bc50"
     },
     {
       "id": "cmd-up",
