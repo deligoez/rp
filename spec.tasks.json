@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:05:57.929235Z",
+  "updated_at": "2026-04-05T15:07:19.464295Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -117,7 +117,7 @@
       "id": "manifest-validation",
       "title": "Manifest validation rules",
       "description": "Implement all 8 validation rules from spec 2.4",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-yaml-parsing",
         "manifest-path-resolution"
@@ -126,11 +126,11 @@
       "acceptance": "- base_dir required and non-empty\n- repo format: exactly one /, alphanumeric+hyphens+underscores+dots\n- No duplicate repos across entire manifest\n- Owner/category names: non-empty, no /, no .., no null bytes\n- At least one owner with at least one repo\n- flat/archive reserved as category names; flat must be boolean\n- deps values must be non-empty strings\n- Categories must have non-empty repo lists",
       "source_sections": null,
       "source_lines": "70-79",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:07:19.420139Z",
+      "closed_at": "2026-04-05T15:07:19.46429Z",
+      "closed_reason": "validate() implements all 8 rules: base_dir required, repo format regex, no duplicates via seen map, valid dir names (no /, .., null), at least one repo, flat reserved as category name, deps non-empty strings, categories non-empty. Wired into Load() after parseOwners. expandTilde called on BaseDir, resolvePath called for each entry's LocalPath.",
+      "gate_passed_at": "2026-04-05T15:07:19.46429Z",
+      "commit_sha": "2841ac0"
     },
     {
       "id": "manifest-load",
