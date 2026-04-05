@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:05:57.769906Z",
+  "updated_at": "2026-04-05T15:05:57.809378Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -99,7 +99,7 @@
       "id": "manifest-path-resolution",
       "title": "Manifest path resolution logic",
       "description": "Implement tilde expansion and directory mapping rules for all 4 modes",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-structs"
       ],
@@ -107,11 +107,11 @@
       "acceptance": "- Tilde expansion in base_dir\n- Categorized: {base_dir}/{owner}/{category}/{repo_name}\n- Flat: {base_dir}/{owner}/{repo_name}\n- Archive categorized: {base_dir}/{owner}/archive/{repo_name}\n- Archive flat: {base_dir}/{owner}/archive/{repo_name}\n- CloneURL = git@github.com:{repo}.git\n- repo_name is substring after / in repo field",
       "source_sections": null,
       "source_lines": "47-68",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:05:57.774701Z",
+      "closed_at": "2026-04-05T15:05:57.809374Z",
+      "closed_reason": "expandTilde using os.UserHomeDir with filepath.Join. resolvePath implements all 4 modes: categorized={base}/{owner}/{cat}/{repo}, flat={base}/{owner}/{repo}, archive always under archive/. CloneURL = git@github.com:{repo}.git. repo_name extracted as substring after /.",
+      "gate_passed_at": "2026-04-05T15:05:57.809374Z",
+      "commit_sha": "d7f908b"
     },
     {
       "id": "manifest-validation",
