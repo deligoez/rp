@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:48.099293Z",
+  "updated_at": "2026-04-05T15:12:48.137895Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -378,7 +378,7 @@
       "id": "cmd-status",
       "title": "Status command implementation",
       "description": "Show repo states grouped by owner with colors",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "git-status",
@@ -389,11 +389,11 @@
       "acceptance": "- Shows clean/dirty/branch/ahead/behind per repo\n- Detached HEAD shows short SHA\n- Format: {label} {symbol} {branch} [{~N dirty} {+N ahead} {-N behind}]\n- Color: OK=green, !!=yellow, XX=red\n- Summary line\n- Exit 0 or 1",
       "source_sections": null,
       "source_lines": "191-233",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:48.103896Z",
+      "closed_at": "2026-04-05T15:12:48.137889Z",
+      "closed_reason": "Status command: shows clean/dirty/branch/ahead/behind per repo. Detached HEAD shows short SHA. Format: {label} {symbol} {branch} [{~N dirty} {+N ahead} {-N behind}]. Color OK=green, !!=yellow, XX=red. Grouped by owner. Summary. Exit 0 or 1.",
+      "gate_passed_at": "2026-04-05T15:12:48.137889Z",
+      "commit_sha": "669eb25"
     },
     {
       "id": "cmd-deps",
