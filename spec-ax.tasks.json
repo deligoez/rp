@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:09:05.524745Z",
+  "updated_at": "2026-04-05T16:09:05.563658Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -336,7 +336,7 @@
       "id": "json-integration-tests",
       "title": "JSON integration tests per command",
       "description": "9 integration tests from spec 9.3",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "status-json",
         "bootstrap-json",
@@ -349,11 +349,11 @@
       "acceptance": "- Test #1: status --json valid JSON with correct exit_code\n- Test #2: status --json not cloned repo has cloned:false, no branch fields\n- Test #3: bootstrap --json has action per repo\n- Test #4: sync --json dirty repo has action:skipped, reason:dirty, dirty_files\n- Test #5: deps --json missing repo has status:skipped, reason:not_on_disk\n- Test #6: archive --json last_commit is RFC 3339\n- Test #7: error --json has error+hint, no summary/repos\n- Test #8: compact --json no repos field\n- Test #9: dry-run --json has dry_run:true and would_clone actions",
       "source_sections": null,
       "source_lines": "613-625",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:09:05.529406Z",
+      "closed_at": "2026-04-05T16:09:05.56365Z",
+      "closed_reason": "9 end-to-end JSON integration tests via subprocess execution: #1 status JSON valid with matching exit_code, #2 not-cloned omits git fields, #3 bootstrap action field, #4 sync dirty reason+dirty_files, #5 deps skipped not_on_disk, #6 archive RFC3339 date, #7 error JSON with error+hint no summary/repos, #8 compact omits repos field, #9 dry-run dry_run:true with would_clone actions. All pass.",
+      "gate_passed_at": "2026-04-05T16:09:05.56365Z",
+      "commit_sha": "b4b2991"
     },
     {
       "id": "up-tests",

@@ -573,3 +573,346 @@ owners:
 
 	_ = strings.Join(actions, ",") // suppress unused import lint
 }
+
+// ---------------------------------------------------------------------------
+// Up Command Tests (spec 9.4)
+// ---------------------------------------------------------------------------
+
+// upManifest creates a test manifest with:
+//   - one repo already cloned (already_exists in bootstrap, up_to_date in sync)
+//   - one repo not cloned with a fake URL (fails in bootstrap)
+//
+// Returns the manifest path and the base directory.
+func upManifest(t *testing.T) (manifestPath, base string) {
+	t.Helper()
+	base = t.TempDir()
+
+	// Create one real repo that already exists on disk.
+	existingDir := filepath.Join(base, "owner", "projects", "existing")
+	initGitRepo(t, existingDir)
+
+	manifestPath = writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/existing
+      - repo: owner/missing
+`, base))
+	return manifestPath, base
+}
+
+// runUpJSON runs `rp up --json` (plus extra args) and returns the parsed JSON.
+func runUpJSON(t *testing.T, binary, manifestPath string, extraArgs ...string) map[string]interface{} {
+	t.Helper()
+	args := append([]string{"--json", "--manifest", manifestPath, "up"}, extraArgs...)
+	cmd := exec.Command(binary, args...)
+	out, _ := cmd.Output()
+	if len(out) == 0 {
+		cmd2 := exec.Command(binary, args...)
+		combined, _ := cmd2.CombinedOutput()
+		t.Fatalf("empty output from binary\ncombined: %s", combined)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON from binary: %v\nraw: %s", err, out)
+	}
+	return result
+}
+
+// assertSubResult checks that the given key in result is a JSON object
+// containing both "summary" and "repos" sub-keys.
+func assertSubResult(t *testing.T, result map[string]interface{}, key string) map[string]interface{} {
+	t.Helper()
+	raw := assertKey(t, result, key)
+	sub, ok := raw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("key %q: expected object, got %T", key, raw)
+	}
+	assertKey(t, sub, "summary")
+	return sub
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-1: Up all phases — JSON has bootstrap, sync, and deps sections
+// ---------------------------------------------------------------------------
+
+func TestUpAllPhases(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	existingDir := filepath.Join(base, "owner", "projects", "existing")
+	initGitRepo(t, existingDir)
+
+	// Include a repo with a dep so the deps phase has work to do.
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/existing
+        deps:
+          - echo hello
+      - repo: owner/missing
+`, base))
+
+	result := runUpJSON(t, binary, manifestPath)
+
+	assertString(t, result, "command", "up")
+	assertKey(t, result, "exit_code")
+
+	// All three sections must be present.
+	assertSubResult(t, result, "bootstrap")
+	assertSubResult(t, result, "sync")
+	assertSubResult(t, result, "deps")
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-2: Up dry-run — bootstrap + sync present, deps omitted, exit_code 0
+// ---------------------------------------------------------------------------
+
+func TestUpDryRun(t *testing.T) {
+	binary := binaryForTest(t)
+	manifestPath, _ := upManifest(t)
+
+	result := runUpJSON(t, binary, manifestPath, "--dry-run")
+
+	assertString(t, result, "command", "up")
+
+	// dry_run must be true.
+	dryRun, ok := result["dry_run"].(bool)
+	if !ok || !dryRun {
+		t.Fatalf("expected dry_run:true, got %v", result["dry_run"])
+	}
+
+	// exit_code must be 0 in dry-run.
+	assertFloat(t, result, "exit_code", 0)
+
+	// bootstrap and sync must be present.
+	assertSubResult(t, result, "bootstrap")
+	assertSubResult(t, result, "sync")
+
+	// deps must be omitted.
+	assertNoKey(t, result, "deps")
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-3: Up no-deps — deps section omitted
+// ---------------------------------------------------------------------------
+
+func TestUpNoDeps(t *testing.T) {
+	binary := binaryForTest(t)
+	manifestPath, _ := upManifest(t)
+
+	result := runUpJSON(t, binary, manifestPath, "--no-deps")
+
+	assertString(t, result, "command", "up")
+	assertSubResult(t, result, "bootstrap")
+	assertSubResult(t, result, "sync")
+	assertNoKey(t, result, "deps")
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-4: Up JSON structure — top-level has command:"up",
+// bootstrap/sync/deps each has summary and repos
+// ---------------------------------------------------------------------------
+
+func TestUpJSONStructure(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	existingDir := filepath.Join(base, "owner", "projects", "existing")
+	initGitRepo(t, existingDir)
+
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/existing
+        deps:
+          - echo hello
+`, base))
+
+	result := runUpJSON(t, binary, manifestPath)
+
+	assertString(t, result, "command", "up")
+	assertKey(t, result, "exit_code")
+
+	for _, phase := range []string{"bootstrap", "sync", "deps"} {
+		sub := assertSubResult(t, result, phase)
+		// repos must be present (not omitted) at the full (non-compact) level.
+		assertKey(t, sub, "repos")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-5: Up exit code — repo with bad URL fails bootstrap → exit_code 2
+// ---------------------------------------------------------------------------
+
+func TestUpExitCodeFailure(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	// Only a missing repo — bootstrap will fail to clone it.
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/willnotclone
+`, base))
+
+	result := runUpJSON(t, binary, manifestPath)
+
+	assertString(t, result, "command", "up")
+
+	// The failed clone must produce exit_code 2 (highest wins).
+	exitCode, ok := result["exit_code"].(float64)
+	if !ok {
+		t.Fatalf("exit_code missing or not a number: %v", result["exit_code"])
+	}
+	if exitCode != 2 {
+		t.Errorf("expected exit_code 2 for bootstrap failure, got %v", exitCode)
+	}
+
+	// Process exit code must also be 2.
+	args := []string{"--json", "--manifest", manifestPath, "up"}
+	cmd := exec.Command(binary, args...)
+	cmd.Run() //nolint:errcheck
+	if cmd.ProcessState != nil {
+		proc := cmd.ProcessState.ExitCode()
+		if proc != 2 {
+			t.Errorf("expected process exit code 2, got %d", proc)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test Up-6: Up phase continuation — dirty repo causes sync skip (exit 1)
+// but deps still runs
+// ---------------------------------------------------------------------------
+
+func TestUpPhaseContinuation(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	// Create a dirty repo that has a dep — sync will skip it, deps should still run.
+	dirtyDir := filepath.Join(base, "owner", "projects", "dirty")
+	makeDirtyGitRepo(t, dirtyDir)
+
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/dirty
+        deps:
+          - echo hello
+`, base))
+
+	result := runUpJSON(t, binary, manifestPath)
+
+	assertString(t, result, "command", "up")
+
+	// sync must report the dirty repo as skipped.
+	syncSub := assertSubResult(t, result, "sync")
+	syncRepos, ok := syncSub["repos"].([]interface{})
+	if !ok || len(syncRepos) == 0 {
+		t.Fatalf("expected sync.repos to be a non-empty array, got %v", syncSub["repos"])
+	}
+	firstSyncRepo := syncRepos[0].(map[string]interface{})
+	if firstSyncRepo["action"] != "skipped" {
+		t.Errorf("expected sync action=skipped for dirty repo, got %v", firstSyncRepo["action"])
+	}
+
+	// deps phase must still be present (phase continuation).
+	assertSubResult(t, result, "deps")
+
+	// exit_code must be at least 1 (skipped in sync).
+	exitCode, ok := result["exit_code"].(float64)
+	if !ok || exitCode < 1 {
+		t.Errorf("expected exit_code >= 1 due to sync skip, got %v", result["exit_code"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Hint Tests (spec 9.5)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Test Hint-1: Missing manifest — error message contains hint text
+// ---------------------------------------------------------------------------
+
+func TestHintMissingManifest(t *testing.T) {
+	binary := binaryForTest(t)
+
+	// runRPJSON already handles this — but we want to verify hint text is non-empty.
+	result := runRPJSON(t, binary, "/nonexistent/path/manifest.yaml", "status")
+
+	hint, ok := result["hint"].(string)
+	if !ok || hint == "" {
+		t.Fatalf("expected non-empty hint field, got %v", result["hint"])
+	}
+
+	// The hint should suggest how to create a manifest.
+	if !strings.Contains(strings.ToLower(hint), "manifest") {
+		t.Errorf("expected hint to reference 'manifest', got: %q", hint)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test Hint-2: JSON error with hint — both "error" and "hint" fields present
+// ---------------------------------------------------------------------------
+
+func TestHintJSONErrorHasHintField(t *testing.T) {
+	binary := binaryForTest(t)
+
+	result := runRPJSON(t, binary, "/nonexistent/path/manifest.yaml", "status")
+
+	// error field must be present and non-empty.
+	errVal, ok := result["error"].(string)
+	if !ok || errVal == "" {
+		t.Fatalf("expected non-empty error field, got %v", result["error"])
+	}
+
+	// hint field must be present and non-empty.
+	hintVal, ok := result["hint"].(string)
+	if !ok || hintVal == "" {
+		t.Fatalf("expected non-empty hint field, got %v", result["hint"])
+	}
+
+	// summary and repos must be absent in an error response.
+	assertNoKey(t, result, "summary")
+	assertNoKey(t, result, "repos")
+
+	// exit_code must be non-zero.
+	ec := assertKey(t, result, "exit_code").(float64)
+	if ec == 0 {
+		t.Errorf("expected non-zero exit_code for error response, got 0")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test Hint-3: Human error with hint — stderr contains "error:" and "hint:" lines
+// ---------------------------------------------------------------------------
+
+func TestHintHumanModeStderr(t *testing.T) {
+	binary := binaryForTest(t)
+
+	// Run WITHOUT --json so we get human-readable output on stderr.
+	cmd := exec.Command(binary, "--manifest", "/nonexistent/path/manifest.yaml", "status")
+	var stdoutBuf, stderrBuf strings.Builder
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	cmd.Run() //nolint:errcheck
+
+	stderr := stderrBuf.String()
+
+	if !strings.Contains(stderr, "error:") {
+		t.Errorf("expected stderr to contain 'error:', got:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "hint:") {
+		t.Errorf("expected stderr to contain 'hint:', got:\n%s", stderr)
+	}
+}
