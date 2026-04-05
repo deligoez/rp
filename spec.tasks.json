@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:05:48.040023Z",
+  "updated_at": "2026-04-05T15:05:57.769906Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -81,7 +81,7 @@
       "id": "manifest-yaml-parsing",
       "title": "Manifest YAML parsing via yaml.Node",
       "description": "Custom UnmarshalYAML with yaml.Node for order-preserving owner/category parsing",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-structs"
       ],
@@ -89,11 +89,11 @@
       "acceptance": "- Custom UnmarshalYAML reads flat as bool, archive as []RepoEntry with IsArchive:true, remaining keys as categories\n- Uses yaml.Node for iteration to preserve YAML document order\n- Manifest.Repos() returns flat list in YAML document order\n- Manifest.Owners() returns []OwnerGroup in manifest order",
       "source_sections": null,
       "source_lines": "35-45,372-377",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:05:57.727144Z",
+      "closed_at": "2026-04-05T15:05:57.769902Z",
+      "closed_reason": "Custom UnmarshalYAML with yaml.Node iteration preserving document order. Two-pass approach: first pass reads flat bool, second pass handles archive (IsArchive:true) and remaining keys as categories. Load(path) reads file, unmarshals rawManifest, calls parseOwners. Manifest.Repos() and Owners() return in YAML order.",
+      "gate_passed_at": "2026-04-05T15:05:57.769902Z",
+      "commit_sha": "a533943"
     },
     {
       "id": "manifest-path-resolution",
