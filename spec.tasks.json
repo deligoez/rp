@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:05:57.848575Z",
+  "updated_at": "2026-04-05T15:05:57.886955Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -190,7 +190,7 @@
       "id": "git-pull",
       "title": "Git Pull function with typed errors",
       "description": "Implement Pull with PullResult, ErrDiverged, ErrNoUpstream",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "git-clone-isrepo"
       ],
@@ -198,11 +198,11 @@
       "acceptance": "- Pull(path) returns PullResult{NewCommits, AlreadyUpToDate}\n- Records HEAD via rev-parse before, counts via rev-list after\n- Returns ErrDiverged on ff-only failure, ErrNoUpstream when no tracking branch\n- On error PullResult is zero-valued\n- Tests #8, #9, #10 pass",
       "source_sections": null,
       "source_lines": "382-387,461-477",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:05:57.853098Z",
+      "closed_at": "2026-04-05T15:05:57.88695Z",
+      "closed_reason": "Pull(path) returns PullResult{NewCommits, AlreadyUpToDate}. Records HEAD via rev-parse before, runs git pull --ff-only, counts via rev-list after. Returns ErrDiverged on ff-only failure (checks stderr for diverged/fast-forward), ErrNoUpstream when no tracking. On error PullResult is zero-valued. Tests #8,#9,#10 pass.",
+      "gate_passed_at": "2026-04-05T15:05:57.88695Z",
+      "commit_sha": "c2f8e57"
     },
     {
       "id": "git-last-commit",
