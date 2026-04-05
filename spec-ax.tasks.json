@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.258332Z",
+  "updated_at": "2026-04-05T16:04:24.297283Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -185,7 +185,7 @@
       "id": "bootstrap-json",
       "title": "Bootstrap command JSON output path",
       "description": "Add JSON output to bootstrap command",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -194,11 +194,11 @@
       "acceptance": "- --json outputs SuccessResult with bootstrap summary and per-repo action\n- action values: cloned, already_exists, failed\n- Failed repos include error field\n- --dry-run: action values would_clone, would_skip, dry_run:true\n- --filter narrows repo set\n- Exit code 2 when failed \u003e 0",
       "source_sections": null,
       "source_lines": "99-132",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.262921Z",
+      "closed_at": "2026-04-05T16:04:24.297277Z",
+      "closed_reason": "Bootstrap JSON: SuccessResult with cloned/already_existed/failed/total summary. Action values cloned/already_exists/failed/would_clone/would_skip. Filter applied. Dry-run sets dry_run:true exit 0. Failed\u003e0 sets exit_code:2.",
+      "gate_passed_at": "2026-04-05T16:04:24.297277Z",
+      "commit_sha": "3f789f1"
     },
     {
       "id": "sync-json",
