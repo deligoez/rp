@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.4151Z",
+  "updated_at": "2026-04-05T16:04:24.455019Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -261,7 +261,7 @@
       "id": "list-json",
       "title": "List command JSON output path",
       "description": "Add JSON output to list command",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -270,11 +270,11 @@
       "acceptance": "- --json outputs SuccessResult with total/missing summary\n- Repos have exists, is_archive, is_flat fields\n- --missing filters in both human and JSON mode\n- --filter narrows repo set\n- Exit code 1 when any missing",
       "source_sections": null,
       "source_lines": "250-272",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.419571Z",
+      "closed_at": "2026-04-05T16:04:24.455012Z",
+      "closed_reason": "List JSON: SuccessResult with total/missing summary. Repos have exists/is_archive/is_flat fields. --missing filters in both modes. --filter via filteredSet. Exit 1 when missing.",
+      "gate_passed_at": "2026-04-05T16:04:24.455012Z",
+      "commit_sha": "4dcb8a8"
     },
     {
       "id": "manifest-init-json",
