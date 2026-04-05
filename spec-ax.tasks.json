@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.297283Z",
+  "updated_at": "2026-04-05T16:04:24.337074Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -204,7 +204,7 @@
       "id": "sync-json",
       "title": "Sync command JSON output path",
       "description": "Add JSON output to sync command with granular summary",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -213,11 +213,11 @@
       "acceptance": "- --json outputs SuccessResult with granular sync summary (pulled/up_to_date/cloned/skipped/failed)\n- Skipped repos have reason field (dirty/unpushed/diverged/no_upstream)\n- Extra fields per reason: dirty-\u003edirty_files, unpushed-\u003eahead+branch, pulled-\u003enew_commits\n- --dry-run: would_pull/would_skip/would_clone actions\n- Exit codes: 0/1/2 per original spec",
       "source_sections": null,
       "source_lines": "134-189",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.301871Z",
+      "closed_at": "2026-04-05T16:04:24.337068Z",
+      "closed_reason": "Sync JSON: granular summary pulled/up_to_date/cloned/skipped/failed/total. Structured syncResult fields map to JSON. Reason values dirty/unpushed/diverged/no_upstream with extra fields. Dry-run would_pull/would_skip/would_clone. Exit codes 0/1/2.",
+      "gate_passed_at": "2026-04-05T16:04:24.337068Z",
+      "commit_sha": "3e7b43d"
     },
     {
       "id": "deps-json",
