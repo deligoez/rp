@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:56:31.352014Z",
+  "updated_at": "2026-04-05T15:57:08.962174Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -60,17 +60,17 @@
       "id": "output-pkg",
       "title": "Create internal/output package with types",
       "description": "SuccessResult, ErrorResult, UpResult, SubResult, HintError types and PrintAndExit",
-      "status": "wip",
+      "status": "done",
       "depends_on": [],
       "estimate_minutes": 12,
       "acceptance": "- SuccessResult struct with Command, ExitCode, DryRun, Summary, Repos fields\n- ErrorResult struct with Command, ExitCode, Error, Hint fields\n- UpResult struct with Command, ExitCode, DryRun, Bootstrap, Sync, Deps (*SubResult)\n- SubResult struct with Summary, Repos\n- HintError with Error() and Unwrap()\n- PrintAndExit writes JSON to stdout then os.Exit\n- IsJSON() function checking flag and RP_JSON env",
       "source_sections": null,
       "source_lines": "506-556",
       "started_at": "2026-04-05T15:56:31.352014Z",
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "closed_at": "2026-04-05T15:57:08.962169Z",
+      "closed_reason": "SuccessResult, ErrorResult, UpResult, SubResult structs defined with correct JSON tags. HintError with Error()/Unwrap()/NewHintError. PrintAndExit writes JSON to stdout then os.Exit. Compact mode strips repos in PrintAndExit. IsJSON()/SetJSON(), IsCompact()/SetCompact() for mode control. PrintErrorAndExit handles HintError extraction. FormatHumanError for stderr output.",
+      "gate_passed_at": "2026-04-05T15:57:08.962169Z",
+      "commit_sha": "cd5dc2a"
     },
     {
       "id": "output-tests",

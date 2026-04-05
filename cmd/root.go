@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/deligoez/rp/internal/output"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,9 @@ var (
 	ManifestPath string
 	Concurrency  int
 	NoColor      bool
+	JSONOutput   bool
+	Compact      bool
+	Filters      []string
 )
 
 var rootCmd = &cobra.Command{
@@ -39,22 +43,36 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// 3. --no-color: CLI flag > NO_COLOR env > default
+		// 3. --json: CLI flag > RP_JSON env > default
+		if !cmd.Flags().Changed("json") {
+			if os.Getenv("RP_JSON") != "" {
+				JSONOutput = true
+			}
+		}
+		output.SetJSON(JSONOutput)
+		if JSONOutput {
+			NoColor = true
+		}
+
+		// 4. --compact: wire to output package
+		output.SetCompact(Compact)
+
+		// 5. --no-color: CLI flag > NO_COLOR env > default
 		if !cmd.Flags().Changed("no-color") {
 			if os.Getenv("NO_COLOR") != "" {
 				NoColor = true
 			}
 		}
 
-		// 4. Wire --no-color to ui package
+		// 6. Wire --no-color to ui package
 		ui.SetNoColor(NoColor)
 
-		// 5. Validate concurrency >= 1
+		// 7. Validate concurrency >= 1
 		if Concurrency < 1 {
 			return fmt.Errorf("--concurrency must be >= 1, got %d", Concurrency)
 		}
 
-		// 6. Expand ~ in ManifestPath
+		// 8. Expand ~ in ManifestPath
 		if strings.HasPrefix(ManifestPath, "~/") {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -87,6 +105,27 @@ func init() {
 		"no-color",
 		false,
 		"disable color output (env: NO_COLOR)",
+	)
+
+	rootCmd.PersistentFlags().BoolVar(
+		&JSONOutput,
+		"json",
+		false,
+		"output results as JSON (env: RP_JSON)",
+	)
+
+	rootCmd.PersistentFlags().BoolVar(
+		&Compact,
+		"compact",
+		false,
+		"omit per-repo details from JSON output",
+	)
+
+	rootCmd.PersistentFlags().StringArrayVar(
+		&Filters,
+		"filter",
+		nil,
+		"filter repos by tag or name (repeatable)",
 	)
 }
 
