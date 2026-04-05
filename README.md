@@ -47,31 +47,33 @@ The manifest lives at `~/.config/rp/manifest.yaml` (override with `-m` or `RP_MA
 base_dir: ~/Developer
 
 owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
+  acme:
+    services:
+      - repo: acme/api
         deps:
           - go mod download
-      - repo: deligoez/blog
+      - repo: acme/web
         deps:
-          - composer install
           - npm install
-    packages:
-      - repo: deligoez/laravel-model-hashids
+    libraries:
+      - repo: acme/shared-utils
     archive:
-      - repo: deligoez/roast
+      - repo: acme/legacy-app
 
-  phonyland:
+  opensource:
     flat: true
     repos:
-      - repo: phonyland/cloud
+      - repo: opensource/design-system
+      - repo: opensource/cli-tools
+        deps:
+          - cargo build
     archive:
-      - repo: phonyland/framework
+      - repo: opensource/old-website
 
-  tarfin-labs:
+  vendor:
     flat: true
     repos:
-      - repo: tarfin-labs/backend
+      - repo: vendor/payments
         deps:
           - composer install
           - npm install
@@ -81,10 +83,10 @@ owners:
 
 | Mode | Category | Path |
 |------|----------|------|
-| Categorized | regular | `~/Developer/deligoez/projects/tp/` |
-| Categorized | archive | `~/Developer/deligoez/archive/roast/` |
-| Flat (`flat: true`) | regular | `~/Developer/phonyland/cloud/` |
-| Flat | archive | `~/Developer/phonyland/archive/framework/` |
+| Categorized | regular | `~/Developer/acme/services/api/` |
+| Categorized | archive | `~/Developer/acme/archive/legacy-app/` |
+| Flat (`flat: true`) | regular | `~/Developer/opensource/design-system/` |
+| Flat | archive | `~/Developer/opensource/archive/old-website/` |
 
 Repos are cloned via SSH: `git@github.com:{owner}/{name}.git`
 
@@ -120,18 +122,18 @@ Evaluation order per repo:
 Show the state of every repo.
 
 ```
-deligoez
-  projects/tp              OK main
-  projects/blog            !! main +2 ahead
-  projects/forum           !! main ~3 dirty
-  archive/roast            OK main
+acme
+  services/api               OK main
+  services/web               !! main +2 ahead
+  libraries/shared-utils     !! main ~3 dirty
+  archive/legacy-app         OK main
 
-phonyland
-  cloud                    OK main
-  archive/framework        XX not cloned
+opensource
+  design-system              OK main
+  archive/old-website        XX not cloned
 
 -- Summary --
-39 OK, 2 need attention, 1 not cloned
+4 OK, 2 need attention, 1 not cloned
 ```
 
 ```bash
@@ -147,7 +149,7 @@ Run dependency install commands defined in the manifest.
 
 ```bash
 rp deps                          # all repos with deps
-rp deps tarfin-labs/backend      # specific repo
+rp deps vendor/payments          # specific repo
 ```
 
 Commands are defined per repo in the manifest (`deps:` field) and run via `sh -c`.
@@ -204,10 +206,10 @@ rp up --no-deps           # skip dep installation
 ### Filtering
 
 ```bash
-rp status --filter deligoez/tp          # exact repo
-rp status --filter deligoez/            # all repos under owner
-rp status --filter deligoez             # same as above
-rp sync --filter deligoez/ --filter phonyland/cloud   # multiple
+rp status --filter acme/api              # exact repo
+rp status --filter acme/                 # all repos under owner
+rp status --filter acme                  # same as above
+rp sync --filter acme/ --filter vendor/  # multiple owners
 ```
 
 ## JSON Output
@@ -217,7 +219,7 @@ All commands support `--json` for structured output. Also enabled with `RP_JSON=
 ```bash
 rp status --json
 rp status --json --compact    # summary only, no per-repo details
-rp list --json --filter deligoez/
+rp list --json --filter acme/
 ```
 
 Example:
@@ -227,16 +229,16 @@ Example:
   "command": "status",
   "exit_code": 0,
   "summary": {
-    "ok": 39,
+    "ok": 5,
     "attention": 2,
     "not_cloned": 1,
-    "total": 42
+    "total": 8
   },
   "repos": [
     {
-      "repo": "deligoez/tp",
-      "owner": "deligoez",
-      "category": "projects",
+      "repo": "acme/api",
+      "owner": "acme",
+      "category": "services",
       "cloned": true,
       "branch": "main",
       "clean": true,
