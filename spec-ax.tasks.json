@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:09:05.563658Z",
+  "updated_at": "2026-04-05T16:11:50.296928Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -359,7 +359,7 @@
       "id": "up-tests",
       "title": "Up command tests",
       "description": "6 tests from spec 9.4",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "cmd-up"
       ],
@@ -367,11 +367,11 @@
       "acceptance": "- Test #1: up runs all 3 phases\n- Test #2: up --dry-run previews bootstrap+sync, deps omitted, exit 0\n- Test #3: up --no-deps omits deps section\n- Test #4: up --json returns UpResult with 3 sub-objects\n- Test #5: up with bootstrap failure exits 2\n- Test #6: up with sync dirty repos still runs deps, exit 1",
       "source_sections": null,
       "source_lines": "627-638",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:11:50.25394Z",
+      "closed_at": "2026-04-05T16:11:50.296921Z",
+      "closed_reason": "6 up command tests: #1 all 3 phases present in JSON, #2 dry-run has dry_run:true deps omitted exit 0, #3 no-deps omits deps section, #4 JSON structure has command:up with summary+repos per phase, #5 failed clone exit_code 2, #6 phase continuation dirty repo skipped in sync but deps still runs. All pass via subprocess execution.",
+      "gate_passed_at": "2026-04-05T16:11:50.296921Z",
+      "commit_sha": "d167217"
     },
     {
       "id": "hint-tests",
