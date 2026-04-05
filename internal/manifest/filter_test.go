@@ -86,3 +86,56 @@ func TestFilterRepos_NoMatches(t *testing.T) {
 		t.Errorf("expected length 0, got %d", len(result))
 	}
 }
+
+// --- QA Regression Tests ---
+
+// QA-R11: Empty string filter matches nothing
+func TestQA_FilterEmptyString(t *testing.T) {
+	result := manifest.FilterRepos(testRepos, []string{""})
+	if len(result) != 0 {
+		t.Errorf("empty string filter should match nothing, got %d", len(result))
+	}
+}
+
+// QA-R12: Overlapping filters don't produce duplicates
+func TestQA_FilterOverlappingNoDupes(t *testing.T) {
+	result := manifest.FilterRepos(testRepos, []string{"deligoez/", "deligoez/tp"})
+	// deligoez/ matches 2 repos, deligoez/tp also matches 1 of those — union should be 2
+	if len(result) != 2 {
+		t.Errorf("expected 2 (no dupes), got %d", len(result))
+	}
+	seen := make(map[string]bool)
+	for _, r := range result {
+		if seen[r.Repo] {
+			t.Errorf("duplicate repo in result: %s", r.Repo)
+		}
+		seen[r.Repo] = true
+	}
+}
+
+// QA-R13: Filter on archive repo by exact match
+func TestQA_FilterArchiveRepo(t *testing.T) {
+	repos := []manifest.RepoEntry{
+		{Repo: "owner/regular", Owner: "owner"},
+		{Repo: "owner/archived", Owner: "owner", IsArchive: true},
+	}
+	result := manifest.FilterRepos(repos, []string{"owner/archived"})
+	if len(result) != 1 || result[0].Repo != "owner/archived" {
+		t.Errorf("expected only owner/archived, got %v", result)
+	}
+}
+
+// QA-R14: FilterOwners removes empty owner groups
+func TestQA_FilterOwnersRemovesEmpty(t *testing.T) {
+	owners := []manifest.OwnerGroup{
+		{Name: "alice", Repos: []manifest.RepoEntry{{Repo: "alice/a", Owner: "alice"}}},
+		{Name: "bob", Repos: []manifest.RepoEntry{{Repo: "bob/b", Owner: "bob"}}},
+	}
+	result := manifest.FilterOwners(owners, []string{"alice/"})
+	if len(result) != 1 {
+		t.Errorf("expected 1 owner group, got %d", len(result))
+	}
+	if result[0].Name != "alice" {
+		t.Errorf("expected alice, got %s", result[0].Name)
+	}
+}
