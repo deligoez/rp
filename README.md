@@ -188,8 +188,30 @@ Bootstrap + sync + deps in one command.
 
 ```bash
 rp up                     # clone, pull, install deps
-rp up --dry-run           # preview bootstrap + sync
+rp up --dry-run           # preview all three phases
 rp up --no-deps           # skip dep installation
+```
+
+### rp check
+
+Boolean exit code — zero output, for scripts and CI.
+
+```bash
+rp check && echo "all good" || echo "needs attention"
+rp check --filter acme/   # check only acme repos
+```
+
+Exit 0 = all clean and cloned. Exit 1 = needs attention. Exit 2 = manifest error.
+
+### rp diff
+
+Show the latest commit for each repo.
+
+```bash
+rp diff                   # all repos
+rp diff --since 7d        # repos with commits in last 7 days
+rp diff --since 24h       # last 24 hours
+rp diff --json            # structured output
 ```
 
 ## Global Flags

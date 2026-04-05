@@ -41,6 +41,8 @@ rp archive                # Report stale repos
 rp list                   # List all repos
 rp manifest init          # Scan dirs, generate manifest
 rp up                     # Bootstrap + sync + deps in one call
+rp check                  # Boolean exit code (0=ok, 1=attention, 2=error)
+rp diff                   # Show latest commit per repo
 ```
 
 ### Global Flags
@@ -58,11 +60,13 @@ rp up                     # Bootstrap + sync + deps in one call
 bootstrap --dry-run
 sync --dry-run
 status --dirty --ahead --behind
-deps [repo]
+deps [repo] --dry-run
 archive --threshold <days>
 list --missing
 manifest init --dir <path> --output <path> --dry-run
 up --dry-run --no-deps
+check                             # no flags except --filter
+diff --since <Nd|Nh>
 ```
 
 ## Project Structure
