@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:57:08.962174Z",
+  "updated_at": "2026-04-05T15:58:31.937144Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -76,7 +76,7 @@
       "id": "output-tests",
       "title": "Output package unit tests",
       "description": "All 8 output tests from spec 9.1",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "output-pkg"
       ],
@@ -84,11 +84,11 @@
       "acceptance": "- Test #1: SuccessResult with empty repos serializes repos as [] not null\n- Test #2: SuccessResult with repo entries populates repos array\n- Test #3: ErrorResult omits summary and repos keys\n- Test #4: ErrorResult without hint omits hint key\n- Test #5: Compact mode omits repos key\n- Test #6: HintError wrapping works with Error() and Unwrap()\n- Test #7: UpResult with 3 sub-results all present\n- Test #8: UpResult with nil Deps omits deps key",
       "source_sections": null,
       "source_lines": "588-599",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:58:31.892898Z",
+      "closed_at": "2026-04-05T15:58:31.937139Z",
+      "closed_reason": "All 8 tests pass: SuccessResult empty repos as [], SuccessResult with entries, ErrorResult omits summary/repos, ErrorResult omits hint, compact omits repos, HintError wrapping with Error/Unwrap/errors.As, UpResult 3 sub-results, UpResult nil Deps omitted.",
+      "gate_passed_at": "2026-04-05T15:58:31.937139Z",
+      "commit_sha": "598aef0"
     },
     {
       "id": "root-json-flags",
