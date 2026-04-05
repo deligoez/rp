@@ -162,14 +162,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 					result.attention = true
 					countAttention++
 
-					// Emit a minimal JSON entry for error cases (cloned but status failed).
-					cloned := true
+					// Emit JSON entry with default git fields (cloned=true requires them).
+					zero := 0
+					f := false
 					jsonRepos = append(jsonRepos, statusRepoJSON{
-						Repo:      entry.Repo,
-						Owner:     entry.Owner,
-						Category:  entry.Category,
-						LocalPath: entry.LocalPath,
-						Cloned:    cloned,
+						Repo:        entry.Repo,
+						Owner:       entry.Owner,
+						Category:    entry.Category,
+						LocalPath:   entry.LocalPath,
+						Cloned:      true,
+						Branch:      "unknown",
+						Clean:       &f,
+						DirtyFiles:  &zero,
+						Ahead:       &zero,
+						Behind:      &zero,
+						HasUpstream: &f,
 					})
 				} else if needsAttention(s) {
 					result.symbol = ui.SymbolWarn()
