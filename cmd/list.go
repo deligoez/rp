@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/deligoez/rp/internal/manifest"
+	"github.com/deligoez/rp/internal/output"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -52,6 +53,15 @@ func runList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading manifest: %w", err)
 	}
 
+	// Apply --filter to repo list.
+	filteredRepos := manifest.FilterRepos(m.Repos(), Filters)
+
+	// Build a set of filtered repo names for fast lookup.
+	filteredSet := make(map[string]bool, len(filteredRepos))
+	for _, r := range filteredRepos {
+		filteredSet[r.Repo] = true
+	}
+
 	totalRepos := 0
 	totalMissing := 0
 
@@ -63,6 +73,11 @@ func runList(cmd *cobra.Command, args []string) error {
 		var archiveLines []listRepoLine
 
 		for _, entry := range owner.Repos {
+			// Skip repos excluded by filter.
+			if !filteredSet[entry.Repo] {
+				continue
+			}
+
 			repoName := listRepoBaseName(entry.Repo)
 			exists := listDirExists(entry.LocalPath)
 
@@ -110,6 +125,51 @@ func runList(cmd *cobra.Command, args []string) error {
 			isFlat:     owner.IsFlat,
 			categories: catBlocks,
 			archive:    archBlock,
+		})
+	}
+
+	// JSON output path.
+	if output.IsJSON() {
+		type jsonRepo struct {
+			Repo      string `json:"repo"`
+			Owner     string `json:"owner"`
+			Category  string `json:"category"`
+			LocalPath string `json:"local_path"`
+			Exists    bool   `json:"exists"`
+			IsArchive bool   `json:"is_archive"`
+			IsFlat    bool   `json:"is_flat"`
+		}
+
+		jsonRepos := make([]jsonRepo, 0, len(filteredRepos))
+		for _, entry := range filteredRepos {
+			exists := listDirExists(entry.LocalPath)
+			if listMissing && exists {
+				continue
+			}
+			jsonRepos = append(jsonRepos, jsonRepo{
+				Repo:      entry.Repo,
+				Owner:     entry.Owner,
+				Category:  entry.Category,
+				LocalPath: entry.LocalPath,
+				Exists:    exists,
+				IsArchive: entry.IsArchive,
+				IsFlat:    entry.IsFlat,
+			})
+		}
+
+		exitCode := 0
+		if totalMissing > 0 {
+			exitCode = 1
+		}
+
+		output.PrintAndExit(output.SuccessResult{
+			Command:  "list",
+			ExitCode: exitCode,
+			Summary: map[string]int{
+				"total":   totalRepos,
+				"missing": totalMissing,
+			},
+			Repos: jsonRepos,
 		})
 	}
 

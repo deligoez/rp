@@ -6,6 +6,7 @@ import (
 
 	"github.com/deligoez/rp/internal/deps"
 	"github.com/deligoez/rp/internal/manifest"
+	"github.com/deligoez/rp/internal/output"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
 	"github.com/spf13/cobra"
@@ -35,6 +36,9 @@ var depsCmd = &cobra.Command{
 
 		m, err := manifest.Load(ManifestPath)
 		if err != nil {
+			if output.IsJSON() {
+				output.PrintErrorAndExit("deps", err)
+			}
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(2)
 		}
@@ -45,12 +49,29 @@ var depsCmd = &cobra.Command{
 		var targets []manifest.RepoEntry
 
 		if len(args) == 1 {
+			// Positional argument takes precedence over --filter; warn if both provided.
+			if len(Filters) > 0 {
+				fmt.Fprintf(os.Stderr, "warning: positional repo argument takes precedence over --filter; --filter ignored\n")
+			}
 			filter := args[0]
 			found := false
 			for _, r := range allRepos {
 				if r.Repo == filter {
 					found = true
 					if len(r.Deps) == 0 {
+						if output.IsJSON() {
+							output.PrintAndExit(output.SuccessResult{
+								Command:  "deps",
+								ExitCode: 0,
+								Summary: map[string]int{
+									"succeeded": 0,
+									"failed":    0,
+									"skipped":   0,
+									"total":     0,
+								},
+								Repos: []interface{}{},
+							})
+						}
 						fmt.Printf("no deps configured for %s\n", filter)
 						return nil
 					}
@@ -59,19 +80,37 @@ var depsCmd = &cobra.Command{
 				}
 			}
 			if !found {
+				if output.IsJSON() {
+					output.PrintErrorAndExit("deps", fmt.Errorf("repo %q not found in manifest", filter))
+				}
 				fmt.Fprintf(os.Stderr, "error: repo %q not found in manifest\n", filter)
 				os.Exit(2)
 			}
 		} else {
-			// No filter: collect all repos that have deps defined.
+			// No positional arg: collect all repos that have deps defined, then apply --filter.
+			var withDeps []manifest.RepoEntry
 			for _, r := range allRepos {
 				if len(r.Deps) > 0 {
-					targets = append(targets, r)
+					withDeps = append(withDeps, r)
 				}
 			}
+			targets = manifest.FilterRepos(withDeps, Filters)
 		}
 
 		if len(targets) == 0 {
+			if output.IsJSON() {
+				output.PrintAndExit(output.SuccessResult{
+					Command:  "deps",
+					ExitCode: 0,
+					Summary: map[string]int{
+						"succeeded": 0,
+						"failed":    0,
+						"skipped":   0,
+						"total":     0,
+					},
+					Repos: []interface{}{},
+				})
+			}
 			fmt.Println("no repos with deps defined")
 			return nil
 		}
@@ -113,8 +152,90 @@ var depsCmd = &cobra.Command{
 
 		succeeded := 0
 		failed := 0
+		skipped := 0
 		anyFailed := false
 
+		// JSON output path.
+		if output.IsJSON() {
+			type jsonCommandEntry struct {
+				Command string `json:"command"`
+				Status  string `json:"status"`
+				Error   string `json:"error,omitempty"`
+			}
+			type jsonRepoEntry struct {
+				Repo     string             `json:"repo"`
+				Status   string             `json:"status"`
+				Reason   string             `json:"reason,omitempty"`
+				Commands []jsonCommandEntry `json:"commands,omitempty"`
+			}
+
+			jsonRepos := make([]jsonRepoEntry, 0, len(targets))
+
+			for _, target := range targets {
+				res, ok := resultMap[target.Repo]
+				if !ok {
+					continue
+				}
+
+				if res.skipped {
+					skipped++
+					jsonRepos = append(jsonRepos, jsonRepoEntry{
+						Repo:   target.Repo,
+						Status: "skipped",
+						Reason: "not_on_disk",
+					})
+					continue
+				}
+
+				repoFailed := false
+				var cmds []jsonCommandEntry
+				for _, cr := range res.results {
+					entry := jsonCommandEntry{Command: cr.command}
+					if cr.failed {
+						entry.Status = "failed"
+						entry.Error = cr.errMsg
+						repoFailed = true
+					} else {
+						entry.Status = "ok"
+					}
+					cmds = append(cmds, entry)
+				}
+
+				repoStatus := "ok"
+				if repoFailed {
+					repoStatus = "failed"
+					failed++
+					anyFailed = true
+				} else {
+					succeeded++
+				}
+
+				jsonRepos = append(jsonRepos, jsonRepoEntry{
+					Repo:     target.Repo,
+					Status:   repoStatus,
+					Commands: cmds,
+				})
+			}
+
+			exitCode := 0
+			if anyFailed {
+				exitCode = 2
+			}
+
+			output.PrintAndExit(output.SuccessResult{
+				Command:  "deps",
+				ExitCode: exitCode,
+				Summary: map[string]int{
+					"succeeded": succeeded,
+					"failed":    failed,
+					"skipped":   skipped,
+					"total":     len(targets),
+				},
+				Repos: jsonRepos,
+			})
+		}
+
+		// Human output path.
 		for _, ownerGroup := range m.Owners() {
 			// Print repos in this owner that are in our targets, preserving manifest order.
 			ownerPrinted := false
@@ -135,6 +256,7 @@ var depsCmd = &cobra.Command{
 
 				if res.skipped {
 					fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
+					skipped++
 					continue
 				}
 

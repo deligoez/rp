@@ -8,6 +8,7 @@ import (
 
 	"github.com/deligoez/rp/internal/git"
 	"github.com/deligoez/rp/internal/manifest"
+	"github.com/deligoez/rp/internal/output"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
 	"github.com/spf13/cobra"
@@ -25,12 +26,28 @@ type bootstrapResult struct {
 type bootstrapStatus int
 
 const (
-	bsCloned      bootstrapStatus = iota
+	bsCloned        bootstrapStatus = iota
 	bsAlreadyExists
 	bsFailed
 	bsWouldClone
 	bsWouldSkip
 )
+
+// bootstrapRepoJSON is the per-repo JSON representation for bootstrap output.
+type bootstrapRepoJSON struct {
+	Repo      string `json:"repo"`
+	Action    string `json:"action"` // "cloned", "already_exists", "failed", "would_clone", "would_skip"
+	LocalPath string `json:"local_path"`
+	Error     string `json:"error,omitempty"`
+}
+
+// bootstrapSummaryJSON is the summary JSON representation for bootstrap output.
+type bootstrapSummaryJSON struct {
+	Cloned         int `json:"cloned"`
+	AlreadyExisted int `json:"already_existed"`
+	Failed         int `json:"failed"`
+	Total          int `json:"total"`
+}
 
 // repoLabel returns the display label for a repo entry following the spec convention:
 //   - archive entries: "archive/{repo_name}"
@@ -67,10 +84,17 @@ var bootstrapCmd = &cobra.Command{
 			return fmt.Errorf("loading manifest: %w", err)
 		}
 
-		repos := m.Repos()
+		repos := manifest.FilterRepos(m.Repos(), Filters)
 
 		if bootstrapDryRun {
-			return runBootstrapDryRun(m)
+			if output.IsJSON() {
+				return runBootstrapDryRunJSON(repos)
+			}
+			return runBootstrapDryRun(m, repos)
+		}
+
+		if output.IsJSON() {
+			return runBootstrapJSON(repos)
 		}
 
 		fmt.Printf("Bootstrapping %s (concurrency: %d)...\n\n",
@@ -129,10 +153,19 @@ var bootstrapCmd = &cobra.Command{
 }
 
 // runBootstrapDryRun prints what would be cloned without performing any operations.
-func runBootstrapDryRun(m *manifest.Manifest) error {
+func runBootstrapDryRun(m *manifest.Manifest, filteredRepos []manifest.RepoEntry) error {
+	// Build a set of filtered repo paths for quick lookup.
+	included := make(map[string]bool, len(filteredRepos))
+	for _, r := range filteredRepos {
+		included[r.LocalPath] = true
+	}
+
 	for _, ownerGroup := range m.Owners() {
 		fmt.Println(ownerGroup.Name)
 		for _, entry := range ownerGroup.Repos {
+			if !included[entry.LocalPath] {
+				continue
+			}
 			label := repoLabel(entry)
 			info, err := os.Stat(entry.LocalPath)
 			var action string
@@ -155,6 +188,97 @@ func runBootstrapDryRun(m *manifest.Manifest) error {
 		}
 	}
 	// --dry-run always exits 0.
+	return nil
+}
+
+// runBootstrapJSON runs bootstrap with JSON output.
+func runBootstrapJSON(repos []manifest.RepoEntry) error {
+	results := worker.PoolWithProgress(
+		repos,
+		Concurrency,
+		worker.PoolOptions{Verb: "cloning"},
+		func(entry manifest.RepoEntry) (bootstrapResult, error) {
+			return processBootstrapEntry(entry), nil
+		},
+	)
+
+	var cloned, existed, failed int
+	repoList := make([]bootstrapRepoJSON, 0, len(results))
+	for _, r := range results {
+		res := r.Value
+		rj := bootstrapRepoJSON{
+			Repo:      res.Entry.Repo,
+			LocalPath: res.Entry.LocalPath,
+			Error:     res.ErrMsg,
+		}
+		switch res.Status {
+		case bsCloned:
+			cloned++
+			rj.Action = "cloned"
+		case bsAlreadyExists:
+			existed++
+			rj.Action = "already_exists"
+		case bsFailed:
+			failed++
+			rj.Action = "failed"
+		}
+		repoList = append(repoList, rj)
+	}
+
+	exitCode := 0
+	if failed > 0 {
+		exitCode = 2
+	}
+
+	result := output.SuccessResult{
+		Command:  "bootstrap",
+		ExitCode: exitCode,
+		DryRun:   false,
+		Summary: bootstrapSummaryJSON{
+			Cloned:         cloned,
+			AlreadyExisted: existed,
+			Failed:         failed,
+			Total:          len(results),
+		},
+		Repos: repoList,
+	}
+	output.PrintAndExit(result)
+	return nil
+}
+
+// runBootstrapDryRunJSON runs bootstrap dry-run with JSON output.
+func runBootstrapDryRunJSON(repos []manifest.RepoEntry) error {
+	var wouldClone, wouldSkip int
+	repoList := make([]bootstrapRepoJSON, 0, len(repos))
+	for _, entry := range repos {
+		rj := bootstrapRepoJSON{
+			Repo:      entry.Repo,
+			LocalPath: entry.LocalPath,
+		}
+		info, err := os.Stat(entry.LocalPath)
+		if err == nil && info.IsDir() && git.IsRepo(entry.LocalPath) {
+			wouldSkip++
+			rj.Action = "would_skip"
+		} else {
+			wouldClone++
+			rj.Action = "would_clone"
+		}
+		repoList = append(repoList, rj)
+	}
+
+	result := output.SuccessResult{
+		Command:  "bootstrap",
+		ExitCode: 0,
+		DryRun:   true,
+		Summary: bootstrapSummaryJSON{
+			Cloned:         wouldClone,
+			AlreadyExisted: wouldSkip,
+			Failed:         0,
+			Total:          len(repos),
+		},
+		Repos: repoList,
+	}
+	output.PrintAndExit(result)
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/deligoez/rp/internal/output"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -497,6 +498,10 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 
 	// 5. Dry-run output.
 	if manifestInitDryRun {
+		if output.IsJSON() {
+			output.PrintAndExit(buildManifestInitResult(discovered, skipped, true))
+		}
+
 		fmt.Printf("Found %d repos:\n", len(discovered))
 		for _, r := range discovered {
 			label := fmt.Sprintf("%s/%s", r.ghOwner, r.repoName)
@@ -521,7 +526,17 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generating YAML: %w", genErr)
 	}
 
-	// 8. Write output.
+	// 8. JSON output path: write YAML to --output if set, then emit JSON (no YAML in JSON).
+	if output.IsJSON() {
+		if writeToFile {
+			if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0644); writeErr != nil {
+				output.PrintErrorAndExit("manifest_init", fmt.Errorf("writing output file: %w", writeErr))
+			}
+		}
+		output.PrintAndExit(buildManifestInitResult(discovered, skipped, false))
+	}
+
+	// 9. Human output path: write YAML.
 	if writeToFile {
 		if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0644); writeErr != nil {
 			return fmt.Errorf("writing output file: %w", writeErr)
@@ -532,4 +547,63 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// buildManifestInitResult constructs the SuccessResult for manifest_init JSON output.
+// It resolves layouts from discovered repos to determine inferred_layout and inferred_category.
+func buildManifestInitResult(discovered []scannedRepo, skipped int, dryRun bool) output.SuccessResult {
+	type jsonRepo struct {
+		Repo             string `json:"repo"`
+		LocalPath        string `json:"local_path"`
+		InferredOwner    string `json:"inferred_owner"`
+		InferredLayout   string `json:"inferred_layout"`
+		InferredCategory string `json:"inferred_category"`
+	}
+
+	// Resolve layouts so we can determine flat vs categorized per repo.
+	layouts := resolveLayouts(discovered)
+
+	// Build a map from absPath -> resolved scannedRepo (with category and layout set).
+	type resolvedInfo struct {
+		repo     scannedRepo
+		isFlat   bool
+	}
+	resolvedByPath := make(map[string]resolvedInfo)
+	for _, layout := range layouts {
+		for _, r := range layout.repos {
+			resolvedByPath[r.absPath] = resolvedInfo{repo: r, isFlat: layout.isFlat}
+		}
+	}
+
+	jsonRepos := make([]jsonRepo, 0, len(discovered))
+	for _, r := range discovered {
+		info, ok := resolvedByPath[r.absPath]
+		layoutStr := "categorized"
+		category := ""
+		if ok {
+			if info.isFlat {
+				layoutStr = "flat"
+			}
+			category = info.repo.category
+		}
+
+		jsonRepos = append(jsonRepos, jsonRepo{
+			Repo:             r.ghRepo,
+			LocalPath:        r.absPath,
+			InferredOwner:    r.ghOwner,
+			InferredLayout:   layoutStr,
+			InferredCategory: category,
+		})
+	}
+
+	return output.SuccessResult{
+		Command:  "manifest_init",
+		ExitCode: 0,
+		DryRun:   dryRun,
+		Summary: map[string]int{
+			"discovered": len(discovered),
+			"skipped":    skipped,
+		},
+		Repos: jsonRepos,
+	}
 }

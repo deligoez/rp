@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:59:29.48035Z",
+  "updated_at": "2026-04-05T15:59:29.520456Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -130,7 +130,7 @@
       "id": "filter-logic",
       "title": "Implement repo filter matching",
       "description": "Filter function that matches repos by exact match or owner prefix",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags"
       ],
@@ -138,11 +138,11 @@
       "acceptance": "- deligoez/tp = exact repo match (one / with non-empty parts both sides)\n- deligoez/ = owner prefix match (trailing /)\n- deligoez = owner prefix match (no / treated as owner)\n- Multiple filters = union of matches\n- Zero matches returns empty list\n- FilterRepos(repos, filters) function exported",
       "source_sections": null,
       "source_lines": "340-356",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:59:29.484877Z",
+      "closed_at": "2026-04-05T15:59:29.52045Z",
+      "closed_reason": "FilterRepos and FilterOwners in internal/manifest/filter.go. Exact match: one / with non-empty parts both sides matches repo.Repo. Owner prefix: trailing / or no / matches repo.Owner. Multiple filters = union. Zero matches returns empty slice (not nil).",
+      "gate_passed_at": "2026-04-05T15:59:29.52045Z",
+      "commit_sha": "8ed306c"
     },
     {
       "id": "filter-tests",
