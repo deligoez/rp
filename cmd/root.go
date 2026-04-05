@@ -22,8 +22,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "rp",
-	Short: "Repo manager CLI — organize, sync, and bootstrap your Developer workspace",
+	Use:           "rp",
+	Short:         "Repo manager CLI — organize, sync, and bootstrap your Developer workspace",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// 1. --manifest: CLI flag > RP_MANIFEST env > default
