@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:11:50.296928Z",
+  "updated_at": "2026-04-05T16:11:50.335532Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -377,7 +377,7 @@
       "id": "hint-tests",
       "title": "Hint error tests",
       "description": "3 hint tests from spec 9.5",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-hints"
       ],
@@ -385,11 +385,11 @@
       "acceptance": "- Test #1: missing manifest path produces error with hint text\n- Test #2: --json + invalid manifest returns JSON with error and hint fields\n- Test #3: human mode invalid manifest shows error: and hint: on stderr",
       "source_sections": null,
       "source_lines": "640-645",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:11:50.301873Z",
+      "closed_at": "2026-04-05T16:11:50.335527Z",
+      "closed_reason": "3 hint tests: #1 missing manifest path error contains hint text referencing 'manifest', #2 JSON error response has both error and hint fields no summary/repos, #3 human mode stderr shows 'error:' and 'hint:' lines. All pass via subprocess checking stdout/stderr.",
+      "gate_passed_at": "2026-04-05T16:11:50.335527Z",
+      "commit_sha": "1218fdd"
     }
   ]
 }
