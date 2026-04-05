@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:48.176833Z",
+  "updated_at": "2026-04-05T15:12:58.121506Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -420,7 +420,7 @@
       "id": "cmd-archive",
       "title": "Archive command implementation",
       "description": "Report stale repos based on commit date threshold",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "git-last-commit",
@@ -431,11 +431,11 @@
       "acceptance": "- Scans non-archive repos on disk\n- Stale if today - commit_date \u003e= threshold\n- Dynamic threshold in header\n- Suggestion includes manifest edit reminder\n- Always exits 0",
       "source_sections": null,
       "source_lines": "266-296",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:58.07963Z",
+      "closed_at": "2026-04-05T15:12:58.121501Z",
+      "closed_reason": "Archive command: scans non-archive repos on disk. Stale if today-commit_date\u003e=threshold (default 365). Uses git log -1 --format=%cI. Dynamic threshold in header. Output grouped by owner with move+manifest-edit suggestion. Always exits 0.",
+      "gate_passed_at": "2026-04-05T15:12:58.121501Z",
+      "commit_sha": "9e9b906"
     },
     {
       "id": "cmd-list",
