@@ -245,14 +245,14 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 	// ── Summary ──────────────────────────────────────────────────────────────
 	fmt.Println("-- Summary --")
 	fmt.Printf("%s, %s, %s\n",
-		ui.Plural(bsClonedCount, "cloned"),
+		fmt.Sprintf("%d cloned", bsClonedCount),
 		pluralExisted(bsExistedCount),
-		ui.Plural(bsFailedCount, "failed"),
+		fmt.Sprintf("%d failed", bsFailedCount),
 	)
-	fmt.Printf("%s pulled, %d up to date, %d skipped\n", ui.Plural(syPulled, ""), syUpToDate, sySkipped)
+	fmt.Printf("%s pulled, %d up to date, %d skipped\n", fmt.Sprintf("%d", syPulled), syUpToDate, sySkipped)
 
 	if runDepsPhase {
-		fmt.Printf("%s succeeded, %d failed\n", ui.Plural(depSucceeded, "deps"), depFailed)
+		fmt.Printf("%s succeeded, %d failed\n", fmt.Sprintf("%d deps", depSucceeded), depFailed)
 	}
 
 	if upDryRun {
