@@ -66,8 +66,12 @@ func SetJSON(v bool) {
 }
 
 // IsJSON reports whether JSON output mode is active.
+// Checks the package variable (set by SetJSON) and falls back to RP_JSON env var.
 func IsJSON() bool {
-	return jsonMode
+	if jsonMode {
+		return true
+	}
+	return os.Getenv("RP_JSON") != ""
 }
 
 // compact tracks whether compact mode is enabled.
