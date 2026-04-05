@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:07:19.504096Z",
+  "updated_at": "2026-04-05T15:09:25.310081Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -136,7 +136,7 @@
       "id": "manifest-load",
       "title": "Manifest Load function with tests",
       "description": "Wire up Load(path) and write all 19 manifest tests",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-validation"
       ],
@@ -144,11 +144,11 @@
       "acceptance": "- Load(path string) (*Manifest, error) reads file, parses YAML, validates, expands tilde\n- All 19 manifest tests pass (spec 7.1 #1-#19)",
       "source_sections": null,
       "source_lines": "365-368,437-459",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:09:25.2641Z",
+      "closed_at": "2026-04-05T15:09:25.310075Z",
+      "closed_reason": "Load(path) reads file, parses YAML via yaml.Node, calls expandTilde on BaseDir, resolvePath for each entry's LocalPath/CloneURL, then validate(). All 19 manifest tests pass: parse valid, 4 path modes, tilde expansion, 5 validation errors, archive IsArchive, deps parsing, cross-owner, order preservation, flat non-boolean, empty deps string.",
+      "gate_passed_at": "2026-04-05T15:09:25.310075Z",
+      "commit_sha": "51168a3"
     },
     {
       "id": "git-clone-isrepo",
