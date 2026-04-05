@@ -202,10 +202,15 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// diffLastCommit runs git log -1 --format=%h|%s|%cI and parses the result.
+// sep is the ASCII Record Separator used as a delimiter in git log format.
+// This avoids conflicts with | or other characters that may appear in commit messages.
+const sep = "\x1e"
+
+// diffLastCommit runs git log -1 with a safe delimiter and parses the result.
 // Returns (sha, message, date, ok). ok is false if the repo has no commits or on error.
 func diffLastCommit(path string) (sha, message string, date time.Time, ok bool) {
-	out, err := exec.Command("git", "-C", path, "log", "-1", "--format=%h|%s|%cI").Output()
+	format := "%h" + sep + "%s" + sep + "%cI"
+	out, err := exec.Command("git", "-C", path, "log", "-1", "--format="+format).Output()
 	if err != nil {
 		return "", "", time.Time{}, false
 	}
@@ -213,7 +218,7 @@ func diffLastCommit(path string) (sha, message string, date time.Time, ok bool) 
 	if line == "" {
 		return "", "", time.Time{}, false
 	}
-	parts := strings.SplitN(line, "|", 3)
+	parts := strings.SplitN(line, sep, 3)
 	if len(parts) != 3 {
 		return "", "", time.Time{}, false
 	}
