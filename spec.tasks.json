@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:09:25.310081Z",
+  "updated_at": "2026-04-05T15:09:25.349688Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -298,7 +298,7 @@
       "id": "worker-pool-progress",
       "title": "Worker pool stderr progress line",
       "description": "Add progress indicator on stderr with TTY detection",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "worker-pool"
       ],
@@ -306,11 +306,11 @@
       "acceptance": "- Progress line on stderr: [N/total] {verb}... overwritten with carriage return\n- Verb configurable per command (cloning/syncing/installing)\n- Suppressed on non-TTY stderr",
       "source_sections": null,
       "source_lines": "410-411",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:09:25.314735Z",
+      "closed_at": "2026-04-05T15:09:25.349682Z",
+      "closed_reason": "PoolWithProgress with PoolOptions{Verb} for stderr progress. TTY detection via charmbracelet/x/term.IsTerminal. Atomic counter for thread-safe progress updates. Format [N/total] verb... with carriage return overwrite. Suppressed on non-TTY. Pool() is now a wrapper around PoolWithProgress with empty options.",
+      "gate_passed_at": "2026-04-05T15:09:25.349682Z",
+      "commit_sha": "555b224"
     },
     {
       "id": "cmd-root",
