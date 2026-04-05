@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:59:29.520456Z",
+  "updated_at": "2026-04-05T16:04:24.258332Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -166,7 +166,7 @@
       "id": "status-json",
       "title": "Status command JSON output path",
       "description": "Add JSON output to status command with per-repo structured data",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -175,11 +175,11 @@
       "acceptance": "- --json outputs SuccessResult with status summary and repo details\n- Cloned repos have branch/clean/dirty_files/ahead/behind/has_upstream\n- Non-cloned repos have cloned:false and omit git fields\n- --compact omits repos array\n- --filter narrows repo set\n- --dirty/--behind/--ahead post-filters with AND logic\n- Exit code in JSON matches process exit",
       "source_sections": null,
       "source_lines": "60-97",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.212728Z",
+      "closed_at": "2026-04-05T16:04:24.258327Z",
+      "closed_reason": "Status JSON path: SuccessResult with ok/attention/not_cloned/total summary. Pointer types for git fields omitted when cloned=false. --dirty/--behind/--ahead post-filters AND logic. --filter via FilterOwners. --compact omits repos.",
+      "gate_passed_at": "2026-04-05T16:04:24.258327Z",
+      "commit_sha": "083ed5b"
     },
     {
       "id": "bootstrap-json",
