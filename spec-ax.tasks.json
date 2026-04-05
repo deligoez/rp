@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:32.305768Z",
+  "updated_at": "2026-04-05T16:09:05.484792Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -298,7 +298,7 @@
       "id": "cmd-up",
       "title": "Composite up command implementation",
       "description": "rp up: bootstrap + sync + deps in one call",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "bootstrap-json",
         "sync-json",
@@ -308,11 +308,11 @@
       "acceptance": "- Runs bootstrap, sync, deps phases sequentially\n- All phases always run (no abort on failure)\n- Repos cloned in bootstrap treated as up_to_date in sync\n- --dry-run: bootstrap+sync previewed, deps skipped, exit 0\n- --no-deps: deps phase skipped entirely\n- --filter applied to all phases\n- Human mode: 3 sections with == headers + combined summary\n- JSON mode: UpResult with 3 sub-objects\n- Exit code: highest across phases",
       "source_sections": null,
       "source_lines": "371-445",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:09:05.438204Z",
+      "closed_at": "2026-04-05T16:09:05.484785Z",
+      "closed_reason": "rp up command: 3 phases (bootstrap+sync+deps) run sequentially, all always run. Repos cloned in phase 1 treated as up_to_date in sync. --dry-run previews bootstrap+sync, skips deps, exit 0. --no-deps skips deps phase. --filter applied to all phases via FilterRepos. Human mode: 3 sections with == headers + combined summary. JSON mode: UpResult with bootstrap/sync/deps SubResults. Exit code highest across phases.",
+      "gate_passed_at": "2026-04-05T16:09:05.484785Z",
+      "commit_sha": "842a120"
     },
     {
       "id": "manifest-hints",
