@@ -101,7 +101,10 @@ func (m *Manifest) validate() error {
 		totalRepos += len(owner.Repos)
 	}
 	if len(m.owners) == 0 || totalRepos == 0 {
-		return fmt.Errorf("manifest: at least one owner with at least one repo is required")
+		return output.NewHintError(
+			fmt.Errorf("manifest: at least one owner with at least one repo is required"),
+			"add at least one owner with repos to manifest",
+		)
 	}
 
 	seen := make(map[string]bool)
@@ -110,21 +113,6 @@ func (m *Manifest) validate() error {
 		// Rule 4: owner names must be valid directory names.
 		if !isValidName(owner.Name) {
 			return fmt.Errorf("manifest: invalid owner name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name)
-		}
-
-		// Track category names seen for this owner to check rule 8.
-		categoryRepos := make(map[string]int)
-		for _, entry := range owner.Repos {
-			if !entry.IsArchive {
-				categoryRepos[entry.Category]++
-			}
-		}
-
-		// Rule 8: categories must contain non-empty repo lists.
-		for cat, count := range categoryRepos {
-			if count == 0 {
-				return fmt.Errorf("manifest: owner %q category %q has an empty repo list", owner.Name, cat)
-			}
 		}
 
 		for _, entry := range owner.Repos {
@@ -160,7 +148,10 @@ func (m *Manifest) validate() error {
 			// Rule 7: deps values must be non-empty strings.
 			for i, dep := range entry.Deps {
 				if dep == "" {
-					return fmt.Errorf("manifest: repo %q has an empty string at deps[%d]", entry.Repo, i)
+					return output.NewHintError(
+						fmt.Errorf("manifest: repo %q has empty deps entry at index %d", entry.Repo, i),
+						"deps entries must be non-empty command strings",
+					)
 				}
 			}
 		}
@@ -293,7 +284,10 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 			// Rule 6: flat must be a boolean. Check the YAML tag explicitly
 			// because yaml.v3 coerces strings like "yes"/"no" to bool silently.
 			if valNode.Kind != yaml.ScalarNode || (valNode.Tag != "!!bool" && valNode.Tag != "tag:yaml.org,2002:bool") {
-				return group, fmt.Errorf("flat must be a boolean, got %q (tag: %s)", valNode.Value, valNode.Tag)
+				return group, output.NewHintError(
+					fmt.Errorf("flat must be a boolean, got %q (tag: %s)", valNode.Value, valNode.Tag),
+					"flat must be true or false, e.g. flat: true",
+				)
 			}
 			var flat bool
 			if err := valNode.Decode(&flat); err != nil {
@@ -343,7 +337,10 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 			}
 			// Rule 8: categories must contain a non-empty list.
 			if len(rawRepos) == 0 {
-				return group, fmt.Errorf("category %q has an empty repo list", key)
+				return group, output.NewHintError(
+					fmt.Errorf("category %q has an empty repo list", key),
+					"add at least one repo to category, or remove it",
+				)
 			}
 			for _, r := range rawRepos {
 				entry := RepoEntry{

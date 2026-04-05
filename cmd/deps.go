@@ -27,6 +27,8 @@ type depsCommandResult struct {
 	errMsg  string
 }
 
+var depsDryRun bool
+
 var depsCmd = &cobra.Command{
 	Use:   "deps [repo]",
 	Short: "Run dependency install commands defined in the manifest",
@@ -116,6 +118,110 @@ var depsCmd = &cobra.Command{
 				})
 			}
 			fmt.Println("no repos with deps defined")
+			return nil
+		}
+
+		// --dry-run: list commands that would run without executing them.
+		if depsDryRun {
+			type jsonCommandEntry struct {
+				Command string `json:"command"`
+				Status  string `json:"status"`
+			}
+			type jsonRepoEntry struct {
+				Repo     string             `json:"repo"`
+				Status   string             `json:"status"`
+				Reason   string             `json:"reason,omitempty"`
+				Commands []jsonCommandEntry `json:"commands,omitempty"`
+			}
+
+			jsonRepos := make([]jsonRepoEntry, 0, len(targets))
+			dryRepos := 0
+			dryCommands := 0
+			drySkipped := 0
+
+			for _, target := range targets {
+				if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "warning: %s not found on disk, skipping\n", target.LocalPath)
+					drySkipped++
+					if output.IsJSON() {
+						jsonRepos = append(jsonRepos, jsonRepoEntry{
+							Repo:   target.Repo,
+							Status: "skipped",
+							Reason: "not_on_disk",
+						})
+					}
+					continue
+				}
+
+				dryRepos++
+				if output.IsJSON() {
+					cmds := make([]jsonCommandEntry, 0, len(target.Deps))
+					for _, command := range target.Deps {
+						dryCommands++
+						cmds = append(cmds, jsonCommandEntry{Command: command, Status: "would_run"})
+					}
+					jsonRepos = append(jsonRepos, jsonRepoEntry{
+						Repo:     target.Repo,
+						Status:   "ok",
+						Commands: cmds,
+					})
+				}
+			}
+
+			if output.IsJSON() {
+				output.PrintAndExit(output.SuccessResult{
+					Command:  "deps",
+					ExitCode: 0,
+					DryRun:   true,
+					Summary: map[string]int{
+						"repos":    dryRepos,
+						"commands": dryCommands,
+						"skipped":  drySkipped,
+					},
+					Repos: jsonRepos,
+				})
+			}
+
+			// Human dry-run output: group by owner, same as normal output.
+			for _, ownerGroup := range m.Owners() {
+				ownerPrinted := false
+				for _, entry := range ownerGroup.Repos {
+					// Only print targets.
+					inTargets := false
+					for _, t := range targets {
+						if t.Repo == entry.Repo {
+							inTargets = true
+							break
+						}
+					}
+					if !inTargets {
+						continue
+					}
+
+					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+						// Already printed warning above; skip here.
+						continue
+					}
+
+					if !ownerPrinted {
+						fmt.Println(ownerGroup.Name)
+						ownerPrinted = true
+					}
+
+					label := repoLabel(entry)
+					paddedLabel := ui.PadRight(label, 24)
+					for _, command := range entry.Deps {
+						dryCommands++
+						fmt.Printf("  %s would run: %s\n", paddedLabel, command)
+					}
+				}
+			}
+
+			fmt.Println()
+			fmt.Printf("-- Summary --\n%s, %s\n",
+				ui.Plural(dryRepos, "repo"),
+				ui.Plural(dryCommands, "command"),
+			)
 			return nil
 		}
 
@@ -311,4 +417,5 @@ var depsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(depsCmd)
+	depsCmd.Flags().BoolVar(&depsDryRun, "dry-run", false, "preview dep commands without executing them")
 }

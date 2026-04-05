@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -417,7 +418,7 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 				skipReason: syncSkipNoUpstream,
 			}
 		default:
-			msg := "pull failed: " + pullErr.Error()
+			msg := classifySyncError(pullErr)
 			return syncResult{
 				label:    label,
 				status:   ui.SymbolWarn() + " " + msg,
@@ -446,5 +447,21 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 		repo:       repo,
 		action:     syncActionPulled,
 		newCommits: pullResult.NewCommits,
+	}
+}
+
+// classifySyncError maps a git pull error to a clean single-line message.
+func classifySyncError(err error) string {
+	if err == nil {
+		return "pull failed"
+	}
+	s := err.Error()
+	switch {
+	case strings.Contains(s, "not currently on a branch"):
+		return "pull failed (detached HEAD)"
+	case strings.Contains(s, "exit status 128"):
+		return "pull failed (empty repo)"
+	default:
+		return "pull failed"
 	}
 }
