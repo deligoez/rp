@@ -1983,3 +1983,101 @@ owners:
 		t.Fatalf("expected non-empty hint field for empty-deps manifest, got %v", result["hint"])
 	}
 }
+
+// --- QA Regression Tests ---
+
+// QA5-R1: diff must handle pipe character in commit message (was using | as delimiter)
+func TestQA_DiffPipeInCommitMessage(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := initGitRepo(t, filepath.Join(base, "owner", "repos", "pipe"))
+
+	// Add commit with pipe in message
+	cmd := exec.Command("git", "-C", repoDir, "commit", "--allow-empty", "-m", "feat: support x | y | z parsing", "--no-gpg-sign")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("commit failed: %s\n%s", err, out)
+	}
+
+	manifest := writeManifest(t, base, fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    repos:
+      - repo: owner/pipe
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "diff")
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok || len(repos) == 0 {
+		t.Fatalf("expected repos in diff output, got %v", result["repos"])
+	}
+	repo := repos[0].(map[string]interface{})
+	msg, _ := repo["message"].(string)
+	if !strings.Contains(msg, "|") {
+		t.Errorf("expected pipe character in message, got %q", msg)
+	}
+	if msg != "feat: support x | y | z parsing" {
+		t.Errorf("message mismatch: got %q", msg)
+	}
+}
+
+// QA4-R1: up --dry-run must NOT create any directories or clone any repos
+func TestQA_UpDryRunDoesNotClone(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	wsDir := filepath.Join(base, "workspace")
+	// Do NOT create wsDir — it should not exist after dry-run
+
+	manifest := writeManifest(t, base, fmt.Sprintf(`
+base_dir: %s
+owners:
+  test:
+    flat: true
+    repos:
+      - repo: test/repo
+`, wsDir))
+
+	result := runUpJSON(t, binary, manifest, "--dry-run")
+
+	// Verify dry_run flag
+	if dr, ok := result["dry_run"].(bool); !ok || !dr {
+		t.Errorf("expected dry_run=true")
+	}
+
+	// Verify workspace directory was NOT created
+	if _, err := os.Stat(wsDir); err == nil {
+		t.Errorf("workspace directory %s should NOT exist after dry-run, but it does", wsDir)
+	}
+}
+
+// QA2-R1: bootstrap summary should not produce "cloneds" or "faileds"
+func TestQA_BootstrapSummaryPlural(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	initGitRepo(t, filepath.Join(base, "owner", "repos", "existing"))
+
+	manifest := writeManifest(t, base, fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    repos:
+      - repo: owner/existing
+`, base))
+
+	// Run bootstrap (human mode) and check summary
+	args := []string{"--manifest", manifest, "bootstrap"}
+	cmd := exec.Command(binary, args...)
+	out, _ := cmd.CombinedOutput()
+	output := string(out)
+
+	if strings.Contains(output, "cloneds") {
+		t.Errorf("summary should not contain 'cloneds': %s", output)
+	}
+	if strings.Contains(output, "faileds") {
+		t.Errorf("summary should not contain 'faileds': %s", output)
+	}
+	if !strings.Contains(output, "already existed") {
+		t.Errorf("summary should contain 'already existed': %s", output)
+	}
+}
