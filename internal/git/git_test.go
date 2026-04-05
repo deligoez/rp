@@ -387,3 +387,69 @@ func TestStatus_DetachedHEAD(t *testing.T) {
 		}
 	}
 }
+
+// --- QA Regression Tests ---
+
+// QA-R7: Status with untracked file counts as dirty
+func TestQA_StatusUntrackedDirty(t *testing.T) {
+	dir := initRepoWithCommit(t)
+	// Add untracked file (not git-added)
+	os.WriteFile(filepath.Join(dir, "UNTRACKED.txt"), []byte("new"), 0644)
+
+	s, err := git.Status(dir)
+	if err != nil {
+		t.Fatalf("Status error: %v", err)
+	}
+	if s.Clean {
+		t.Error("expected Clean=false for repo with untracked file")
+	}
+	if s.DirtyFiles != 1 {
+		t.Errorf("expected DirtyFiles=1, got %d", s.DirtyFiles)
+	}
+}
+
+// QA-R8: Status with staged-only change counts as dirty
+func TestQA_StatusStagedDirty(t *testing.T) {
+	dir := initRepoWithCommit(t)
+	// Modify and stage (but don't commit)
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("modified"), 0644)
+	run(t, dir, "git", "add", "f.txt")
+
+	s, err := git.Status(dir)
+	if err != nil {
+		t.Fatalf("Status error: %v", err)
+	}
+	if s.Clean {
+		t.Error("expected Clean=false for repo with staged changes")
+	}
+	if s.DirtyFiles != 1 {
+		t.Errorf("expected DirtyFiles=1, got %d", s.DirtyFiles)
+	}
+}
+
+// QA-R9: Status on feature branch shows branch name
+func TestQA_StatusFeatureBranch(t *testing.T) {
+	dir := initRepoWithCommit(t)
+	run(t, dir, "git", "checkout", "-b", "feature/test-branch")
+
+	s, err := git.Status(dir)
+	if err != nil {
+		t.Fatalf("Status error: %v", err)
+	}
+	if s.Branch != "feature/test-branch" {
+		t.Errorf("expected branch=feature/test-branch, got %s", s.Branch)
+	}
+}
+
+// QA-R10: Pull on empty repo (no commits) should return error
+func TestQA_PullEmptyRepo(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "git", "init")
+	run(t, dir, "git", "config", "user.email", "test@test.com")
+	run(t, dir, "git", "config", "user.name", "Test")
+
+	_, err := git.Pull(dir)
+	if err == nil {
+		t.Error("expected error pulling from empty repo (no commits)")
+	}
+}
