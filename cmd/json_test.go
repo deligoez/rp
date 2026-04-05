@@ -1610,3 +1610,376 @@ owners:
 		t.Fatalf("expected non-empty hint field for empty-category manifest, got %v", result["hint"])
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Test 1 (new): deps --dry-run positional with no deps → "no deps configured",
+// exit 0
+// ---------------------------------------------------------------------------
+
+// TestDepsDryRunPositionalNoDeps: manifest with a repo that has NO deps.
+// Running `deps --dry-run --json reponame` should exit 0 and return an empty
+// repos array (the "no deps configured" fast path).
+func TestDepsDryRunPositionalNoDeps(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "nodeps")
+	initGitRepo(t, repoDir)
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/nodeps
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "deps", "--dry-run", "owner/nodeps")
+
+	assertString(t, result, "command", "deps")
+	assertFloat(t, result, "exit_code", 0)
+
+	// repos array must be empty (no deps to report).
+	repos, ok := result["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected repos array, got %T (%v)", result["repos"], result["repos"])
+	}
+	if len(repos) != 0 {
+		t.Errorf("expected empty repos array for no-deps repo, got %d entries", len(repos))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 2 (new): sync --json --filter on a repo whose remote has been deleted
+// → error contains "pull failed", no newlines, no raw "fatal:"
+// ---------------------------------------------------------------------------
+
+// TestSyncCleanErrorGeneric: init a bare repo, clone it, delete the bare repo,
+// then sync. The clone's remote points to a deleted path → pull fails with a
+// generic error that must say "pull failed" but must NOT contain newlines or
+// raw git stderr like "fatal:".
+func TestSyncCleanErrorGeneric(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	// Create a bare "upstream" repo.
+	bareDir := filepath.Join(base, "bare.git")
+	if err := os.MkdirAll(bareDir, 0755); err != nil {
+		t.Fatalf("MkdirAll bare: %v", err)
+	}
+	runGit := func(dir string, args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
+	runGit(bareDir, "init", "--bare")
+
+	// Clone the bare repo so we have a local copy with a valid remote.
+	cloneDir := filepath.Join(base, "owner", "projects", "thatrepo")
+	if err := os.MkdirAll(filepath.Dir(cloneDir), 0755); err != nil {
+		t.Fatalf("MkdirAll clone parent: %v", err)
+	}
+	c := exec.Command("git", "clone", bareDir, cloneDir)
+	if out, err := c.CombinedOutput(); err != nil {
+		t.Fatalf("git clone: %v\n%s", err, out)
+	}
+	runGit(cloneDir, "config", "user.email", "test@example.com")
+	runGit(cloneDir, "config", "user.name", "Test User")
+
+	// Make a commit in the clone so it has history.
+	readmePath := filepath.Join(cloneDir, "README.md")
+	if err := os.WriteFile(readmePath, []byte("hello\n"), 0644); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	runGit(cloneDir, "add", "README.md")
+	runGit(cloneDir, "commit", "-m", "init")
+
+	// Delete the bare (upstream) repo — the remote now points to a missing path.
+	if err := os.RemoveAll(bareDir); err != nil {
+		t.Fatalf("RemoveAll bare: %v", err)
+	}
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/thatrepo
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "sync", "--filter", "owner/")
+
+	assertString(t, result, "command", "sync")
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok || len(repos) == 0 {
+		t.Fatalf("expected at least 1 repo entry in sync result, got %v", result["repos"])
+	}
+
+	repo := repos[0].(map[string]interface{})
+
+	errField, _ := repo["error"].(string)
+	if !strings.Contains(errField, "pull failed") {
+		t.Errorf("expected error to contain 'pull failed', got %q", errField)
+	}
+
+	// Must be single-line — no raw git stderr.
+	if strings.Contains(errField, "\n") {
+		t.Errorf("expected single-line error, got multi-line: %q", errField)
+	}
+	if strings.Contains(errField, "fatal:") {
+		t.Errorf("expected clean error without raw git stderr, got %q", errField)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 3 (new): check --filter on a clean subset → exit 0
+// ---------------------------------------------------------------------------
+
+// TestCheckWithFilter: create 2 repos, make one dirty. Run `check
+// --filter clean-owner/`. Should exit 0 because the dirty repo is excluded.
+func TestCheckWithFilter(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	cleanDir := filepath.Join(base, "clean-owner", "projects", "clean")
+	initGitRepo(t, cleanDir)
+
+	dirtyDir := filepath.Join(base, "dirty-owner", "projects", "dirty")
+	makeDirtyGitRepo(t, dirtyDir)
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  clean-owner:
+    projects:
+      - repo: clean-owner/clean
+  dirty-owner:
+    projects:
+      - repo: dirty-owner/dirty
+`, base))
+
+	_, _, exitCode := runCheckCmd(binary, manifest, "--filter", "clean-owner/")
+
+	if exitCode != 0 {
+		t.Errorf("expected exit 0 when filtering to clean repos, got %d", exitCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 4 (new): check with repo that has no remote → exit 0 (clean is fine)
+// ---------------------------------------------------------------------------
+
+// TestCheckNoUpstreamClean: create a repo with no remote (just git init +
+// commit). Run check. Should exit 0 — no upstream is OK when the repo is clean.
+func TestCheckNoUpstreamClean(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "local")
+	initGitRepo(t, repoDir)
+	// initGitRepo creates a clean repo with no remote.
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/local
+`, base))
+
+	_, _, exitCode := runCheckCmd(binary, manifest)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit 0 for clean repo with no upstream, got %d", exitCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 5 (new): diff --since 1d excludes a repo backdated to 2020
+// ---------------------------------------------------------------------------
+
+// TestDiffSinceExcludes: create a repo whose commit is backdated to 2020.
+// Running `diff --json --since 1d` should NOT include that repo in the output.
+func TestDiffSinceExcludes(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "oldrepo")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	runCmd := func(env []string, dir string, args ...string) {
+		t.Helper()
+		c := exec.Command(args[0], args[1:]...)
+		c.Dir = dir
+		c.Env = env
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+
+	baseEnv := os.Environ()
+
+	runCmd(baseEnv, repoDir, "git", "init")
+	runCmd(baseEnv, repoDir, "git", "config", "user.email", "test@example.com")
+	runCmd(baseEnv, repoDir, "git", "config", "user.name", "Test User")
+
+	readmePath := filepath.Join(repoDir, "README.md")
+	if err := os.WriteFile(readmePath, []byte("old\n"), 0644); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	runCmd(baseEnv, repoDir, "git", "add", "README.md")
+
+	// Backdate both author date and committer date to 2020.
+	backdatedEnv := append(append([]string{}, baseEnv...), "GIT_COMMITTER_DATE=2020-01-01T00:00:00Z")
+	runCmd(backdatedEnv, repoDir,
+		"git", "commit", "-m", "old", "--date=2020-01-01T00:00:00Z")
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/oldrepo
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "diff", "--since", "1d")
+
+	assertString(t, result, "command", "diff")
+	assertFloat(t, result, "exit_code", 0)
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected repos array, got %T", result["repos"])
+	}
+
+	// The backdated repo must NOT appear.
+	for _, r := range repos {
+		entry := r.(map[string]interface{})
+		if entry["repo"] == "owner/oldrepo" {
+			t.Errorf("expected backdated repo to be excluded by --since 1d, but it appeared in output")
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 6 (new): diff --json on an empty repo (no commits) → no crash, repo absent
+// ---------------------------------------------------------------------------
+
+// TestDiffEmptyRepoSkipped: create an empty repo (git init, no commits).
+// Run `diff --json`. Should not crash and the empty repo must not appear in
+// the repos array.
+func TestDiffEmptyRepoSkipped(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	emptyDir := filepath.Join(base, "owner", "projects", "empty")
+	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	c := exec.Command("git", "init")
+	c.Dir = emptyDir
+	if out, err := c.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+	} {
+		c2 := exec.Command("git", args...)
+		c2.Dir = emptyDir
+		c2.CombinedOutput() //nolint:errcheck
+	}
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/empty
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "diff")
+
+	assertString(t, result, "command", "diff")
+	assertFloat(t, result, "exit_code", 0)
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected repos array, got %T", result["repos"])
+	}
+
+	// Empty repo has no commits, so diff skips it silently.
+	for _, r := range repos {
+		entry := r.(map[string]interface{})
+		if entry["repo"] == "owner/empty" {
+			t.Errorf("expected empty repo to be skipped in diff output, but it appeared")
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 7 (new): list --json with flat: 42 (non-bool) → hint field present
+// ---------------------------------------------------------------------------
+
+// TestHintFlatNonBool: manifest with flat: 42 (a non-boolean value).
+// Running `list --json` should fail manifest validation and return a non-empty
+// hint field explaining the problem.
+func TestHintFlatNonBool(t *testing.T) {
+	binary := binaryForTest(t)
+
+	dir := t.TempDir()
+	manifest := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    flat: 42
+    projects:
+      - repo: owner/myrepo
+`, dir))
+
+	result := runRPJSON(t, binary, manifest, "list")
+
+	assertKey(t, result, "error")
+
+	hint, ok := result["hint"].(string)
+	if !ok || hint == "" {
+		t.Fatalf("expected non-empty hint field for flat:42 manifest, got %v", result["hint"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 8 (new): list --json with deps: [""] (empty string dep) → hint present
+// ---------------------------------------------------------------------------
+
+// TestHintEmptyDeps: manifest with deps: [""] (an empty string in the deps
+// list). Running `list --json` should fail manifest validation and return a
+// non-empty hint field explaining the problem.
+func TestHintEmptyDeps(t *testing.T) {
+	binary := binaryForTest(t)
+
+	dir := t.TempDir()
+	manifest := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    projects:
+      - repo: owner/myrepo
+        deps:
+          - ""
+`, dir))
+
+	result := runRPJSON(t, binary, manifest, "list")
+
+	assertKey(t, result, "error")
+
+	hint, ok := result["hint"].(string)
+	if !ok || hint == "" {
+		t.Fatalf("expected non-empty hint field for empty-deps manifest, got %v", result["hint"])
+	}
+}
