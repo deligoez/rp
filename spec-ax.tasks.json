@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.376004Z",
+  "updated_at": "2026-04-05T16:04:24.4151Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -242,7 +242,7 @@
       "id": "archive-json",
       "title": "Archive command JSON output path",
       "description": "Add JSON output to archive command",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -251,11 +251,11 @@
       "acceptance": "- --json outputs SuccessResult with candidates count and threshold\n- Repos have last_commit (RFC 3339), days_ago, suggestion field\n- --filter narrows repo set\n- Always exit 0",
       "source_sections": null,
       "source_lines": "225-248",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.380427Z",
+      "closed_at": "2026-04-05T16:04:24.415094Z",
+      "closed_reason": "Archive JSON: SuccessResult with candidates/threshold_days summary. Repos have last_commit RFC3339, days_ago, suggestion field. Filter via FilterRepos. Always exit 0.",
+      "gate_passed_at": "2026-04-05T16:04:24.415094Z",
+      "commit_sha": "614ac00"
     },
     {
       "id": "list-json",
