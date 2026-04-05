@@ -80,10 +80,14 @@ var depsCmd = &cobra.Command{
 				}
 			}
 			if !found {
+				notFoundErr := output.NewHintError(
+					fmt.Errorf("repo %q not found in manifest", filter),
+					"check repo name, available: rp list --json",
+				)
 				if output.IsJSON() {
-					output.PrintErrorAndExit("deps", fmt.Errorf("repo %q not found in manifest", filter))
+					output.PrintErrorAndExit("deps", notFoundErr)
 				}
-				fmt.Fprintf(os.Stderr, "error: repo %q not found in manifest\n", filter)
+				fmt.Fprintf(os.Stderr, "%s\n", output.FormatHumanError(notFoundErr))
 				os.Exit(2)
 			}
 		} else {

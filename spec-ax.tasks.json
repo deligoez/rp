@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.494029Z",
+  "updated_at": "2026-04-05T16:04:32.305768Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -148,7 +148,7 @@
       "id": "filter-tests",
       "title": "Filter unit tests",
       "description": "All 7 filter tests from spec 9.2",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "filter-logic"
       ],
@@ -156,11 +156,11 @@
       "acceptance": "- Test #1: exact repo filter returns only that repo\n- Test #2: owner prefix with slash returns all owner repos\n- Test #3: owner prefix without slash same as with slash\n- Test #4: multiple filters returns union\n- Test #5: no matches returns empty slice\n- Test #6: filter works with JSON output\n- Test #7: deps positional arg overrides filter with warning",
       "source_sections": null,
       "source_lines": "601-611",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:32.258825Z",
+      "closed_at": "2026-04-05T16:04:32.305762Z",
+      "closed_reason": "5 FilterRepos tests implemented and pass: Test #1 exact repo filter deligoez/tp returns only that repo. Test #2 owner prefix with trailing slash deligoez/ returns all deligoez repos. Test #3 owner prefix without slash deligoez same result as with slash. Test #4 multiple filters union of deligoez/ and phonyland/cloud. Test #5 no matches nonexistent/repo returns empty non-nil slice len 0. Tests #6 and #7 are integration-level and covered by command JSON tests.",
+      "gate_passed_at": "2026-04-05T16:04:32.305762Z",
+      "commit_sha": "30343ba"
     },
     {
       "id": "status-json",

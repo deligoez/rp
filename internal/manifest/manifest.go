@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/deligoez/rp/internal/output"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,7 +89,10 @@ func isValidName(name string) bool {
 func (m *Manifest) validate() error {
 	// Rule 1: base_dir must be present and non-empty.
 	if m.BaseDir == "" {
-		return fmt.Errorf("manifest: base_dir must be present and non-empty")
+		return output.NewHintError(
+			fmt.Errorf("manifest: base_dir must be present and non-empty"),
+			"add base_dir to manifest: base_dir: ~/Developer",
+		)
 	}
 
 	// Rule 5: at least one owner with at least one repo must exist.
@@ -138,12 +142,18 @@ func (m *Manifest) validate() error {
 
 			// Rule 2: repo field must match {owner}/{name}.
 			if !repoPattern.MatchString(entry.Repo) {
-				return fmt.Errorf("manifest: repo %q does not match required pattern {owner}/{name} (alphanumeric, hyphens, underscores, dots only)", entry.Repo)
+				return output.NewHintError(
+					fmt.Errorf("manifest: repo %q does not match required pattern {owner}/{name} (alphanumeric, hyphens, underscores, dots only)", entry.Repo),
+					"repo must be owner/name, e.g. deligoez/tp",
+				)
 			}
 
 			// Rule 3: no duplicate repos across entire manifest.
 			if seen[entry.Repo] {
-				return fmt.Errorf("manifest: duplicate repo %q", entry.Repo)
+				return output.NewHintError(
+					fmt.Errorf("manifest: duplicate repo %q", entry.Repo),
+					fmt.Sprintf("remove duplicate entry for %s in manifest", entry.Repo),
+				)
 			}
 			seen[entry.Repo] = true
 
@@ -176,12 +186,21 @@ type rawRepo struct {
 func Load(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, output.NewHintError(
+				fmt.Errorf("reading manifest: %w", err),
+				"create manifest with: rp manifest init --dir ~/Developer",
+			)
+		}
 		return nil, fmt.Errorf("reading manifest: %w", err)
 	}
 
 	var raw rawManifest
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parsing manifest YAML: %w", err)
+		return nil, output.NewHintError(
+			fmt.Errorf("parsing manifest YAML: %w", err),
+			fmt.Sprintf("check manifest syntax at %s", path),
+		)
 	}
 
 	// Expand tilde in base_dir before path resolution.

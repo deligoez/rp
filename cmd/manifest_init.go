@@ -449,7 +449,10 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 	writeToFile := manifestInitOutput != "" && manifestInitOutput != "stdout"
 	if writeToFile && !manifestInitDryRun {
 		if _, statErr := os.Stat(manifestInitOutput); statErr == nil {
-			return fmt.Errorf("output file %q already exists; delete it first", manifestInitOutput)
+			return output.NewHintError(
+				fmt.Errorf("output file %q already exists; delete it first", manifestInitOutput),
+				fmt.Sprintf("delete %s first, or use stdout", manifestInitOutput),
+			)
 		}
 	}
 
