@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:58.121506Z",
+  "updated_at": "2026-04-05T15:12:58.161161Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -441,7 +441,7 @@
       "id": "cmd-list",
       "title": "List command implementation",
       "description": "Hierarchical repo listing with --missing filter",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "ui-formatting",
@@ -451,11 +451,11 @@
       "acceptance": "- Category sub-headers with bare repo names\n- Flat owners: repos at category-header indent level\n- Shows path and OK/XX missing\n- --missing omits fully-cloned groups\n- Summary: N total, N missing\n- Exit 0 or 1",
       "source_sections": null,
       "source_lines": "298-327",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:58.126276Z",
+      "closed_at": "2026-04-05T15:12:58.161157Z",
+      "closed_reason": "List command: hierarchical layout with category sub-headers and bare repo names. Flat owners repos at category-header indent. Archive as separate sub-group. Shows path and OK/XX missing. --missing omits fully-cloned groups. Summary N total/missing. Exit 0 or 1.",
+      "gate_passed_at": "2026-04-05T15:12:58.161157Z",
+      "commit_sha": "3bec7f6"
     },
     {
       "id": "cmd-manifest-init",
