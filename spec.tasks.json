@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:01:25.265028Z",
+  "updated_at": "2026-04-05T15:01:34.420075Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -226,7 +226,7 @@
       "id": "deps-package",
       "title": "Deps RunDeps function with tests",
       "description": "Implement RunDeps via sh -c with exec.Cmd.Dir",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "init-project"
       ],
@@ -234,11 +234,11 @@
       "acceptance": "- RunDeps(path, commands) runs each command via sh -c with exec.Cmd.Dir\n- Stops on first failure with command name and stderr in error\n- Empty list is no-op\n- All 7 deps tests pass (spec 7.3 #1-#7)",
       "source_sections": null,
       "source_lines": "392-394,479-489",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:01:34.384542Z",
+      "closed_at": "2026-04-05T15:01:34.420072Z",
+      "closed_reason": "RunDeps(path, commands) implemented via sh -c with exec.Cmd.Dir set to path. Stops on first failure returning error with command name and stderr. Empty command list returns nil (no-op). All 7 deps tests pass: single command, multiple commands, empty list, failing command, repo dir, shell features, first-failure-stops.",
+      "gate_passed_at": "2026-04-05T15:01:34.420072Z",
+      "commit_sha": "613aead"
     },
     {
       "id": "ui-symbols",
