@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:04:24.337074Z",
+  "updated_at": "2026-04-05T16:04:24.376004Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -223,7 +223,7 @@
       "id": "deps-json",
       "title": "Deps command JSON output path",
       "description": "Add JSON output to deps command",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags",
         "filter-logic"
@@ -232,11 +232,11 @@
       "acceptance": "- --json outputs SuccessResult with deps summary and per-repo command results\n- Each repo has status (ok/failed/skipped) and commands array\n- Skipped repos (not on disk) have reason: not_on_disk\n- --filter + positional: positional wins with stderr warning\n- Exit code 2 when any command fails",
       "source_sections": null,
       "source_lines": "191-223",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:04:24.341509Z",
+      "closed_at": "2026-04-05T16:04:24.375998Z",
+      "closed_reason": "Deps JSON: SuccessResult with succeeded/failed/skipped/total. Per-repo status ok/failed/skipped with reason:not_on_disk. Commands array per-command. Positional arg overrides --filter with stderr warning. Exit 2 on failure.",
+      "gate_passed_at": "2026-04-05T16:04:24.375998Z",
+      "commit_sha": "6258024"
     },
     {
       "id": "archive-json",
