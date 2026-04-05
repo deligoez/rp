@@ -25,7 +25,7 @@ var upCmd = &cobra.Command{
 }
 
 func init() {
-	upCmd.Flags().BoolVar(&upDryRun, "dry-run", false, "preview bootstrap and sync without making changes; skip deps")
+	upCmd.Flags().BoolVar(&upDryRun, "dry-run", false, "preview all phases without making changes; deps phase shows would-run commands")
 	upCmd.Flags().BoolVar(&upNoDeps, "no-deps", false, "skip dependency installation phase")
 	rootCmd.AddCommand(upCmd)
 }
@@ -160,8 +160,9 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 
 	// ── Phase 3: Deps ────────────────────────────────────────────────────────
 	var depSucceeded, depFailed int
+	var dryDepRepos, dryDepCommands int
 
-	runDepsPhase := !upDryRun && !upNoDeps
+	runDepsPhase := !upNoDeps
 
 	if runDepsPhase {
 		fmt.Println("== Deps ==")
@@ -174,67 +175,101 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 
 		if len(depsTargets) > 0 {
-			depsResults := worker.PoolWithProgress(
-				depsTargets,
-				Concurrency,
-				worker.PoolOptions{Verb: "installing"},
-				func(entry manifest.RepoEntry) (depsRepoResult, error) {
-					result := depsRepoResult{entry: entry}
-					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-						result.skipped = true
-						result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-						return result, nil
+			if upDryRun {
+				// Dry-run: preview commands that would run, no worker pool needed.
+				for _, ownerGroup := range owners {
+					ownerPrinted := false
+					for _, entry := range ownerGroup.Repos {
+						inTargets := false
+						for _, t := range depsTargets {
+							if t.Repo == entry.Repo {
+								inTargets = true
+								break
+							}
+						}
+						if !inTargets {
+							continue
+						}
+						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+							fmt.Fprintf(os.Stderr, "  warning: %s not found on disk, skipping\n", entry.LocalPath)
+							continue
+						}
+						if !ownerPrinted {
+							fmt.Println(ownerGroup.Name)
+							ownerPrinted = true
+						}
+						label := repoLabel(entry)
+						paddedLabel := ui.PadRight(label, 24)
+						for _, command := range entry.Deps {
+							fmt.Printf("  %s would run: %s\n", paddedLabel, command)
+							dryDepCommands++
+						}
+						dryDepRepos++
 					}
-					for _, command := range entry.Deps {
-						err := deps.RunDeps(entry.LocalPath, []string{command})
-						cr := depsCommandResult{command: command}
-						if err != nil {
-							cr.failed = true
-							cr.errMsg = err.Error()
+				}
+			} else {
+				depsResults := worker.PoolWithProgress(
+					depsTargets,
+					Concurrency,
+					worker.PoolOptions{Verb: "installing"},
+					func(entry manifest.RepoEntry) (depsRepoResult, error) {
+						result := depsRepoResult{entry: entry}
+						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+							result.skipped = true
+							result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
+							return result, nil
+						}
+						for _, command := range entry.Deps {
+							err := deps.RunDeps(entry.LocalPath, []string{command})
+							cr := depsCommandResult{command: command}
+							if err != nil {
+								cr.failed = true
+								cr.errMsg = err.Error()
+								result.results = append(result.results, cr)
+								break
+							}
 							result.results = append(result.results, cr)
-							break
 						}
-						result.results = append(result.results, cr)
-					}
-					return result, nil
-				},
-			)
+						return result, nil
+					},
+				)
 
-			depsMap := make(map[string]depsRepoResult, len(depsResults))
-			for _, r := range depsResults {
-				depsMap[r.Value.entry.Repo] = r.Value
-			}
+				depsMap := make(map[string]depsRepoResult, len(depsResults))
+				for _, r := range depsResults {
+					depsMap[r.Value.entry.Repo] = r.Value
+				}
 
-			for _, ownerGroup := range owners {
-				ownerPrinted := false
-				for _, entry := range ownerGroup.Repos {
-					res, ok := depsMap[entry.Repo]
-					if !ok {
-						continue
-					}
-					label := repoLabel(entry)
-					paddedLabel := ui.PadRight(label, 24)
-					if !ownerPrinted {
-						fmt.Println(ownerGroup.Name)
-						ownerPrinted = true
-					}
-					if res.skipped {
-						fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
-						continue
-					}
-					repoFailed := false
-					for _, cr := range res.results {
-						if cr.failed {
-							fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
-							repoFailed = true
-						} else {
-							fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
+				for _, ownerGroup := range owners {
+					ownerPrinted := false
+					for _, entry := range ownerGroup.Repos {
+						res, ok := depsMap[entry.Repo]
+						if !ok {
+							continue
 						}
-					}
-					if repoFailed {
-						depFailed++
-					} else if len(res.results) > 0 {
-						depSucceeded++
+						label := repoLabel(entry)
+						paddedLabel := ui.PadRight(label, 24)
+						if !ownerPrinted {
+							fmt.Println(ownerGroup.Name)
+							ownerPrinted = true
+						}
+						if res.skipped {
+							fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
+							continue
+						}
+						repoFailed := false
+						for _, cr := range res.results {
+							if cr.failed {
+								fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
+								repoFailed = true
+							} else {
+								fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
+							}
+						}
+						if repoFailed {
+							depFailed++
+						} else if len(res.results) > 0 {
+							depSucceeded++
+						}
 					}
 				}
 			}
@@ -252,7 +287,11 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 	fmt.Printf("%s pulled, %d up to date, %d skipped\n", fmt.Sprintf("%d", syPulled), syUpToDate, sySkipped)
 
 	if runDepsPhase {
-		fmt.Printf("%s succeeded, %d failed\n", fmt.Sprintf("%d deps", depSucceeded), depFailed)
+		if upDryRun {
+			fmt.Printf("%s, %s would run\n", ui.Plural(dryDepRepos, "repo"), ui.Plural(dryDepCommands, "command"))
+		} else {
+			fmt.Printf("%s succeeded, %d failed\n", fmt.Sprintf("%d deps", depSucceeded), depFailed)
+		}
 	}
 
 	if upDryRun {
@@ -449,7 +488,7 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 	}
 
 	// ── Phase 3: Deps ────────────────────────────────────────────────────────
-	runDepsPhase := !upDryRun && !upNoDeps
+	runDepsPhase := !upNoDeps
 
 	if runDepsPhase {
 		var depsTargets []manifest.RepoEntry
@@ -459,101 +498,141 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 			}
 		}
 
-		depsWorkerResults := worker.PoolWithProgress(
-			depsTargets,
-			Concurrency,
-			worker.PoolOptions{Verb: "installing"},
-			func(entry manifest.RepoEntry) (depsRepoResult, error) {
-				res := depsRepoResult{entry: entry}
-				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-					res.skipped = true
-					res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-					return res, nil
-				}
-				for _, command := range entry.Deps {
-					err := deps.RunDeps(entry.LocalPath, []string{command})
-					cr := depsCommandResult{command: command}
-					if err != nil {
-						cr.failed = true
-						cr.errMsg = err.Error()
-						res.results = append(res.results, cr)
-						break
-					}
-					res.results = append(res.results, cr)
-				}
-				return res, nil
-			},
-		)
-
 		type jsonCmdEntry struct {
 			Command string `json:"command"`
 			Status  string `json:"status"`
 			Error   string `json:"error,omitempty"`
 		}
 		type jsonRepoEntry struct {
-			Repo     string        `json:"repo"`
-			Status   string        `json:"status"`
-			Reason   string        `json:"reason,omitempty"`
+			Repo     string         `json:"repo"`
+			Status   string         `json:"status"`
+			Reason   string         `json:"reason,omitempty"`
 			Commands []jsonCmdEntry `json:"commands,omitempty"`
 		}
 
-		depsMap := make(map[string]depsRepoResult, len(depsWorkerResults))
-		for _, r := range depsWorkerResults {
-			depsMap[r.Value.entry.Repo] = r.Value
-		}
+		if upDryRun {
+			if len(depsTargets) > 0 {
+				// Dry-run: preview commands without executing them.
+				var dryRepos, dryCommands, drySkipped int
+				depsRepos := make([]jsonRepoEntry, 0, len(depsTargets))
 
-		var depSucceeded, depFailed, depSkipped int
-		depsRepos := make([]jsonRepoEntry, 0, len(depsTargets))
-
-		for _, target := range depsTargets {
-			res, ok := depsMap[target.Repo]
-			if !ok {
-				continue
-			}
-			if res.skipped {
-				depSkipped++
-				depsRepos = append(depsRepos, jsonRepoEntry{
-					Repo:   target.Repo,
-					Status: "skipped",
-					Reason: "not_on_disk",
-				})
-				continue
-			}
-			repoFailed := false
-			var cmds []jsonCmdEntry
-			for _, cr := range res.results {
-				e := jsonCmdEntry{Command: cr.command}
-				if cr.failed {
-					e.Status = "failed"
-					e.Error = cr.errMsg
-					repoFailed = true
-				} else {
-					e.Status = "ok"
+				for _, target := range depsTargets {
+					if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
+						drySkipped++
+						depsRepos = append(depsRepos, jsonRepoEntry{
+							Repo:   target.Repo,
+							Status: "skipped",
+							Reason: "not_on_disk",
+						})
+						continue
+					}
+					cmds := make([]jsonCmdEntry, 0, len(target.Deps))
+					for _, command := range target.Deps {
+						dryCommands++
+						cmds = append(cmds, jsonCmdEntry{Command: command, Status: "would_run"})
+					}
+					depsRepos = append(depsRepos, jsonRepoEntry{
+						Repo:     target.Repo,
+						Status:   "ok",
+						Commands: cmds,
+					})
+					dryRepos++
 				}
-				cmds = append(cmds, e)
-			}
-			repoStatus := "ok"
-			if repoFailed {
-				repoStatus = "failed"
-				depFailed++
-			} else {
-				depSucceeded++
-			}
-			depsRepos = append(depsRepos, jsonRepoEntry{
-				Repo:     target.Repo,
-				Status:   repoStatus,
-				Commands: cmds,
-			})
-		}
 
-		result.Deps = &output.SubResult{
-			Summary: map[string]int{
-				"succeeded": depSucceeded,
-				"failed":    depFailed,
-				"skipped":   depSkipped,
-				"total":     len(depsTargets),
-			},
-			Repos: depsRepos,
+				result.Deps = &output.SubResult{
+					Summary: map[string]int{
+						"repos":    dryRepos,
+						"commands": dryCommands,
+						"skipped":  drySkipped,
+					},
+					Repos: depsRepos,
+				}
+			}
+		} else if len(depsTargets) > 0 {
+			depsWorkerResults := worker.PoolWithProgress(
+				depsTargets,
+				Concurrency,
+				worker.PoolOptions{Verb: "installing"},
+				func(entry manifest.RepoEntry) (depsRepoResult, error) {
+					res := depsRepoResult{entry: entry}
+					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+						res.skipped = true
+						res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
+						return res, nil
+					}
+					for _, command := range entry.Deps {
+						err := deps.RunDeps(entry.LocalPath, []string{command})
+						cr := depsCommandResult{command: command}
+						if err != nil {
+							cr.failed = true
+							cr.errMsg = err.Error()
+							res.results = append(res.results, cr)
+							break
+						}
+						res.results = append(res.results, cr)
+					}
+					return res, nil
+				},
+			)
+
+			depsMap := make(map[string]depsRepoResult, len(depsWorkerResults))
+			for _, r := range depsWorkerResults {
+				depsMap[r.Value.entry.Repo] = r.Value
+			}
+
+			var depSucceeded, depFailed, depSkipped int
+			depsRepos := make([]jsonRepoEntry, 0, len(depsTargets))
+
+			for _, target := range depsTargets {
+				res, ok := depsMap[target.Repo]
+				if !ok {
+					continue
+				}
+				if res.skipped {
+					depSkipped++
+					depsRepos = append(depsRepos, jsonRepoEntry{
+						Repo:   target.Repo,
+						Status: "skipped",
+						Reason: "not_on_disk",
+					})
+					continue
+				}
+				repoFailed := false
+				var cmds []jsonCmdEntry
+				for _, cr := range res.results {
+					e := jsonCmdEntry{Command: cr.command}
+					if cr.failed {
+						e.Status = "failed"
+						e.Error = cr.errMsg
+						repoFailed = true
+					} else {
+						e.Status = "ok"
+					}
+					cmds = append(cmds, e)
+				}
+				repoStatus := "ok"
+				if repoFailed {
+					repoStatus = "failed"
+					depFailed++
+				} else {
+					depSucceeded++
+				}
+				depsRepos = append(depsRepos, jsonRepoEntry{
+					Repo:     target.Repo,
+					Status:   repoStatus,
+					Commands: cmds,
+				})
+			}
+
+			result.Deps = &output.SubResult{
+				Summary: map[string]int{
+					"succeeded": depSucceeded,
+					"failed":    depFailed,
+					"skipped":   depSkipped,
+					"total":     len(depsTargets),
+				},
+				Repos: depsRepos,
+			}
 		}
 	}
 
