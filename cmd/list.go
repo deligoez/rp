@@ -120,6 +120,11 @@ func runList(cmd *cobra.Command, args []string) error {
 			archBlock = &listCategoryBlock{name: "archive", repos: archiveLines}
 		}
 
+		// Skip empty owner blocks (all repos filtered out).
+		if len(catBlocks) == 0 && archBlock == nil {
+			continue
+		}
+
 		blocks = append(blocks, listOwnerBlock{
 			name:       owner.Name,
 			isFlat:     owner.IsFlat,
