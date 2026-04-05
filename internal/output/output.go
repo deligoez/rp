@@ -126,7 +126,13 @@ func PrintAndExit(v interface{}) {
 }
 
 // PrintErrorAndExit prints an ErrorResult for the given command and error, then exits.
+// Default exit code is 2. Use PrintErrorAndExitCode for a custom exit code.
 func PrintErrorAndExit(command string, err error) {
+	PrintErrorAndExitCode(command, err, 2)
+}
+
+// PrintErrorAndExitCode prints an ErrorResult with a specific exit code.
+func PrintErrorAndExitCode(command string, err error, exitCode int) {
 	result := ErrorResult{
 		Command:  command,
 		ExitCode: exitCode,
