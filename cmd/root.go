@@ -132,7 +132,10 @@ func init() {
 // Execute runs the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if output.IsJSON() {
+			output.PrintErrorAndExit("rp", err)
+		}
+		fmt.Fprintln(os.Stderr, output.FormatHumanError(err))
 		os.Exit(2)
 	}
 }

@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:58:31.937144Z",
+  "updated_at": "2026-04-05T15:58:31.977157Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -94,7 +94,7 @@
       "id": "root-json-flags",
       "title": "Add JSON/compact/filter flags to root",
       "description": "Add persistent --json, --compact, --filter flags to root command",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "output-pkg"
       ],
@@ -102,11 +102,11 @@
       "acceptance": "- --json persistent flag on root command\n- --compact persistent flag on root command\n- --filter persistent string slice flag on root command\n- RP_JSON=1 env var enables JSON mode\n- JSON mode implies ui.SetNoColor(true)\n- Exported JSONOutput, Compact, Filters variables in cmd package",
       "source_sections": null,
       "source_lines": "9-22,340-356",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:58:31.941628Z",
+      "closed_at": "2026-04-05T15:58:31.977151Z",
+      "closed_reason": "Added --json, --compact, --filter persistent flags. RP_JSON env var support. JSON mode implies NoColor=true. output.SetJSON/SetCompact wired in PersistentPreRunE. Exported JSONOutput, Compact, Filters variables.",
+      "gate_passed_at": "2026-04-05T15:58:31.977151Z",
+      "commit_sha": "133d861"
     },
     {
       "id": "root-hint-handler",
