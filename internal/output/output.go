@@ -129,7 +129,7 @@ func PrintAndExit(v interface{}) {
 func PrintErrorAndExit(command string, err error) {
 	result := ErrorResult{
 		Command:  command,
-		ExitCode: 2,
+		ExitCode: exitCode,
 		Error:    err.Error(),
 	}
 	var hintErr *HintError
