@@ -17,7 +17,6 @@ import (
 // syncResult holds the outcome of processing a single repo during sync.
 type syncResult struct {
 	label    string
-	owner    string
 	status   string // e.g. "OK up to date", "!! dirty - 3 changed files"
 	exitCode int    // 0, 1, or 2
 }
@@ -77,9 +76,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("-- Summary --\n%s, %s\n",
-		ui.Plural(len(repos), "repo")+" synced",
-		ui.Plural(needAttention, "repo")+" need attention",
+	fmt.Printf("-- Summary --\n%s synced, %d need attention\n",
+		ui.Plural(len(repos), "repo"),
+		needAttention,
 	)
 
 	if syncDryRun {
@@ -95,17 +94,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 // Evaluation order follows spec §3.3 (first match wins).
 func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncResult {
 	path := entry.LocalPath
-	owner := entry.Owner
 
 	// 1. Not cloned → clone (create parent dirs first).
 	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 		if dryRun {
-			return syncResult{label: label, owner: owner, status: "would clone", exitCode: 0}
+			return syncResult{label: label, status: "would clone", exitCode: 0}
 		}
 		if mkErr := os.MkdirAll(filepath.Dir(path), 0755); mkErr != nil {
 			return syncResult{
 				label:    label,
-				owner:    owner,
 				status:   ui.SymbolError() + " FAILED: could not create parent dirs: " + mkErr.Error(),
 				exitCode: 2,
 			}
@@ -113,19 +110,17 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 		if cloneErr := git.Clone(entry.CloneURL, path); cloneErr != nil {
 			return syncResult{
 				label:    label,
-				owner:    owner,
 				status:   ui.SymbolError() + " FAILED: git clone: " + cloneErr.Error(),
 				exitCode: 2,
 			}
 		}
-		return syncResult{label: label, owner: owner, status: ui.SymbolOK() + " cloned", exitCode: 0}
+		return syncResult{label: label, status: ui.SymbolOK() + " cloned", exitCode: 0}
 	}
 
 	// 2. Path exists but is NOT a git repo.
 	if !git.IsRepo(path) {
 		return syncResult{
 			label:    label,
-			owner:    owner,
 			status:   ui.SymbolError() + " not a git repository",
 			exitCode: 2,
 		}
@@ -136,7 +131,6 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 	if err != nil {
 		return syncResult{
 			label:    label,
-			owner:    owner,
 			status:   ui.SymbolError() + " git status failed: " + err.Error(),
 			exitCode: 2,
 		}
@@ -146,36 +140,35 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 	if repoStatus.DirtyFiles > 0 {
 		detail := "dirty - " + ui.Plural(repoStatus.DirtyFiles, "changed file")
 		if dryRun {
-			return syncResult{label: label, owner: owner, status: "would skip (" + detail + ")", exitCode: 0}
+			return syncResult{label: label, status: "would skip (" + detail + ")", exitCode: 0}
 		}
-		return syncResult{label: label, owner: owner, status: ui.SymbolWarn() + " " + detail, exitCode: 1}
+		return syncResult{label: label, status: ui.SymbolWarn() + " " + detail, exitCode: 1}
 	}
 
 	// 4. Unpushed commits (only when HasUpstream && Ahead > 0) → skip, warn.
 	if repoStatus.HasUpstream && repoStatus.Ahead > 0 {
 		detail := ui.Plural(repoStatus.Ahead, "unpushed commit") + " (" + repoStatus.Branch + ")"
 		if dryRun {
-			return syncResult{label: label, owner: owner, status: "would skip (" + detail + ")", exitCode: 0}
+			return syncResult{label: label, status: "would skip (" + detail + ")", exitCode: 0}
 		}
-		return syncResult{label: label, owner: owner, status: ui.SymbolWarn() + " " + detail, exitCode: 1}
+		return syncResult{label: label, status: ui.SymbolWarn() + " " + detail, exitCode: 1}
 	}
 
 	// 5. Clean → git pull --ff-only.
 	if dryRun {
-		return syncResult{label: label, owner: owner, status: "would pull", exitCode: 0}
+		return syncResult{label: label, status: "would pull", exitCode: 0}
 	}
 
 	pullResult, pullErr := git.Pull(path)
 	if pullErr != nil {
 		switch {
 		case errors.Is(pullErr, git.ErrDiverged):
-			return syncResult{label: label, owner: owner, status: ui.SymbolWarn() + " diverged", exitCode: 1}
+			return syncResult{label: label, status: ui.SymbolWarn() + " diverged", exitCode: 1}
 		case errors.Is(pullErr, git.ErrNoUpstream):
-			return syncResult{label: label, owner: owner, status: ui.SymbolWarn() + " no upstream", exitCode: 1}
+			return syncResult{label: label, status: ui.SymbolWarn() + " no upstream", exitCode: 1}
 		default:
 			return syncResult{
 				label:    label,
-				owner:    owner,
 				status:   ui.SymbolWarn() + " pull failed: " + pullErr.Error(),
 				exitCode: 1,
 			}
@@ -183,12 +176,11 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 	}
 
 	if pullResult.AlreadyUpToDate {
-		return syncResult{label: label, owner: owner, status: ui.SymbolOK() + " up to date", exitCode: 0}
+		return syncResult{label: label, status: ui.SymbolOK() + " up to date", exitCode: 0}
 	}
 
 	return syncResult{
 		label:    label,
-		owner:    owner,
 		status:   ui.SymbolOK() + " pulled " + ui.Plural(pullResult.NewCommits, "commit"),
 		exitCode: 0,
 	}

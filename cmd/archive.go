@@ -24,7 +24,7 @@ var archiveCmd = &cobra.Command{
 
 		today := time.Now().Truncate(24 * time.Hour)
 
-		fmt.Printf("Archive candidates (last commit >= %d days ago):\n", archiveThreshold)
+		fmt.Printf("Archive candidates (last commit >= %d days ago):\n\n", archiveThreshold)
 
 		type candidate struct {
 			label    string
@@ -94,8 +94,11 @@ var archiveCmd = &cobra.Command{
 			}
 		}
 
-		for _, or_ := range ownerResults {
-			fmt.Printf("\n%s\n", or_.name)
+		for i, or_ := range ownerResults {
+			if i > 0 {
+				fmt.Println()
+			}
+			fmt.Println(or_.name)
 			for _, c := range or_.candidates {
 				fmt.Printf("  %-24s last commit: %s (%d days ago)\n",
 					c.label,

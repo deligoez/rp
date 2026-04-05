@@ -1,0 +1,395 @@
+{
+  "version": 1,
+  "spec": "spec-ax.md",
+  "created_at": "0001-01-01T00:00:00Z",
+  "updated_at": "2026-04-05T15:56:31.352014Z",
+  "workflow": {
+    "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
+  },
+  "coverage": {
+    "total_sections": 42,
+    "mapped_sections": 0,
+    "context_only": [
+      "# rp AX (Agent Experience) Improvements Spec",
+      "## 1. Overview",
+      "## 2. JSON Output Mode",
+      "### 2.1 Global `--json` Flag",
+      "### 2.2 JSON Output Contract",
+      "### 2.3 Per-Command JSON Schemas",
+      "#### `rp status --json`",
+      "#### `rp bootstrap --json`",
+      "#### `rp sync --json`",
+      "#### `rp deps --json`",
+      "#### `rp archive --json`",
+      "#### `rp list --json`",
+      "#### `rp manifest init --json`",
+      "## 3. Structured Errors with Hints",
+      "### 3.1 Error Format",
+      "### 3.2 Implementation",
+      "### 3.3 Human Mode Errors",
+      "## 4. Repo Filtering",
+      "### 4.1 `--filter` Flag",
+      "### 4.2 `--filter` on `deps` Command",
+      "### 4.3 Status Convenience Filters",
+      "## 5. Composite Command: `rp up`",
+      "### 5.1 Behavior",
+      "### 5.2 Flags",
+      "### 5.3 Output",
+      "### 5.4 Exit Codes",
+      "## 6. Compact Output Mode",
+      "### 6.1 `--compact` Flag",
+      "## 7. Exit Code Handling in JSON Mode",
+      "### 7.1 No Direct os.Exit()",
+      "### 7.2 Implementation Pattern",
+      "## 8. Implementation Notes",
+      "### 8.1 Output Package",
+      "### 8.2 TTY Detection for Testing",
+      "### 8.3 Backwards Compatibility",
+      "### 8.4 New Package",
+      "## 9. Testing Strategy",
+      "### 9.1 Output Package Tests (`internal/output/output_test.go`)",
+      "### 9.2 Filter Tests",
+      "### 9.3 JSON Integration Tests (per command)",
+      "### 9.4 Up Command Tests",
+      "### 9.5 Hint Tests"
+    ],
+    "unmapped": []
+  },
+  "tasks": [
+    {
+      "id": "output-pkg",
+      "title": "Create internal/output package with types",
+      "description": "SuccessResult, ErrorResult, UpResult, SubResult, HintError types and PrintAndExit",
+      "status": "wip",
+      "depends_on": [],
+      "estimate_minutes": 12,
+      "acceptance": "- SuccessResult struct with Command, ExitCode, DryRun, Summary, Repos fields\n- ErrorResult struct with Command, ExitCode, Error, Hint fields\n- UpResult struct with Command, ExitCode, DryRun, Bootstrap, Sync, Deps (*SubResult)\n- SubResult struct with Summary, Repos\n- HintError with Error() and Unwrap()\n- PrintAndExit writes JSON to stdout then os.Exit\n- IsJSON() function checking flag and RP_JSON env",
+      "source_sections": null,
+      "source_lines": "506-556",
+      "started_at": "2026-04-05T15:56:31.352014Z",
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "output-tests",
+      "title": "Output package unit tests",
+      "description": "All 8 output tests from spec 9.1",
+      "status": "open",
+      "depends_on": [
+        "output-pkg"
+      ],
+      "estimate_minutes": 12,
+      "acceptance": "- Test #1: SuccessResult with empty repos serializes repos as [] not null\n- Test #2: SuccessResult with repo entries populates repos array\n- Test #3: ErrorResult omits summary and repos keys\n- Test #4: ErrorResult without hint omits hint key\n- Test #5: Compact mode omits repos key\n- Test #6: HintError wrapping works with Error() and Unwrap()\n- Test #7: UpResult with 3 sub-results all present\n- Test #8: UpResult with nil Deps omits deps key",
+      "source_sections": null,
+      "source_lines": "588-599",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "root-json-flags",
+      "title": "Add JSON/compact/filter flags to root",
+      "description": "Add persistent --json, --compact, --filter flags to root command",
+      "status": "open",
+      "depends_on": [
+        "output-pkg"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- --json persistent flag on root command\n- --compact persistent flag on root command\n- --filter persistent string slice flag on root command\n- RP_JSON=1 env var enables JSON mode\n- JSON mode implies ui.SetNoColor(true)\n- Exported JSONOutput, Compact, Filters variables in cmd package",
+      "source_sections": null,
+      "source_lines": "9-22,340-356",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "root-hint-handler",
+      "title": "Root command HintError handler",
+      "description": "Handle HintError in root Execute() for both JSON and human modes",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- Root Execute checks returned error for *HintError\n- JSON mode: prints ErrorResult JSON with error and hint fields\n- Human mode: prints 'error:' and 'hint:' lines to stderr\n- Non-HintError in JSON mode: prints ErrorResult without hint\n- Exit code 2 for all error paths",
+      "source_sections": null,
+      "source_lines": "300-338",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "filter-logic",
+      "title": "Implement repo filter matching",
+      "description": "Filter function that matches repos by exact match or owner prefix",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- deligoez/tp = exact repo match (one / with non-empty parts both sides)\n- deligoez/ = owner prefix match (trailing /)\n- deligoez = owner prefix match (no / treated as owner)\n- Multiple filters = union of matches\n- Zero matches returns empty list\n- FilterRepos(repos, filters) function exported",
+      "source_sections": null,
+      "source_lines": "340-356",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "filter-tests",
+      "title": "Filter unit tests",
+      "description": "All 7 filter tests from spec 9.2",
+      "status": "open",
+      "depends_on": [
+        "filter-logic"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- Test #1: exact repo filter returns only that repo\n- Test #2: owner prefix with slash returns all owner repos\n- Test #3: owner prefix without slash same as with slash\n- Test #4: multiple filters returns union\n- Test #5: no matches returns empty slice\n- Test #6: filter works with JSON output\n- Test #7: deps positional arg overrides filter with warning",
+      "source_sections": null,
+      "source_lines": "601-611",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "status-json",
+      "title": "Status command JSON output path",
+      "description": "Add JSON output to status command with per-repo structured data",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 12,
+      "acceptance": "- --json outputs SuccessResult with status summary and repo details\n- Cloned repos have branch/clean/dirty_files/ahead/behind/has_upstream\n- Non-cloned repos have cloned:false and omit git fields\n- --compact omits repos array\n- --filter narrows repo set\n- --dirty/--behind/--ahead post-filters with AND logic\n- Exit code in JSON matches process exit",
+      "source_sections": null,
+      "source_lines": "60-97",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "bootstrap-json",
+      "title": "Bootstrap command JSON output path",
+      "description": "Add JSON output to bootstrap command",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- --json outputs SuccessResult with bootstrap summary and per-repo action\n- action values: cloned, already_exists, failed\n- Failed repos include error field\n- --dry-run: action values would_clone, would_skip, dry_run:true\n- --filter narrows repo set\n- Exit code 2 when failed \u003e 0",
+      "source_sections": null,
+      "source_lines": "99-132",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "sync-json",
+      "title": "Sync command JSON output path",
+      "description": "Add JSON output to sync command with granular summary",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 12,
+      "acceptance": "- --json outputs SuccessResult with granular sync summary (pulled/up_to_date/cloned/skipped/failed)\n- Skipped repos have reason field (dirty/unpushed/diverged/no_upstream)\n- Extra fields per reason: dirty-\u003edirty_files, unpushed-\u003eahead+branch, pulled-\u003enew_commits\n- --dry-run: would_pull/would_skip/would_clone actions\n- Exit codes: 0/1/2 per original spec",
+      "source_sections": null,
+      "source_lines": "134-189",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "deps-json",
+      "title": "Deps command JSON output path",
+      "description": "Add JSON output to deps command",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- --json outputs SuccessResult with deps summary and per-repo command results\n- Each repo has status (ok/failed/skipped) and commands array\n- Skipped repos (not on disk) have reason: not_on_disk\n- --filter + positional: positional wins with stderr warning\n- Exit code 2 when any command fails",
+      "source_sections": null,
+      "source_lines": "191-223",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "archive-json",
+      "title": "Archive command JSON output path",
+      "description": "Add JSON output to archive command",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 8,
+      "acceptance": "- --json outputs SuccessResult with candidates count and threshold\n- Repos have last_commit (RFC 3339), days_ago, suggestion field\n- --filter narrows repo set\n- Always exit 0",
+      "source_sections": null,
+      "source_lines": "225-248",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "list-json",
+      "title": "List command JSON output path",
+      "description": "Add JSON output to list command",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags",
+        "filter-logic"
+      ],
+      "estimate_minutes": 8,
+      "acceptance": "- --json outputs SuccessResult with total/missing summary\n- Repos have exists, is_archive, is_flat fields\n- --missing filters in both human and JSON mode\n- --filter narrows repo set\n- Exit code 1 when any missing",
+      "source_sections": null,
+      "source_lines": "250-272",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "manifest-init-json",
+      "title": "Manifest init command JSON output path",
+      "description": "Add JSON output to manifest init",
+      "status": "open",
+      "depends_on": [
+        "root-json-flags"
+      ],
+      "estimate_minutes": 10,
+      "acceptance": "- --json outputs SuccessResult with discovered/skipped counts\n- Repos have inferred_owner, inferred_layout, inferred_category\n- No manifest_yaml field in JSON (per spec)\n- --dry-run in JSON: dry_run:true, same repo structure\n- Exit 0 or 2",
+      "source_sections": null,
+      "source_lines": "274-298",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "cmd-up",
+      "title": "Composite up command implementation",
+      "description": "rp up: bootstrap + sync + deps in one call",
+      "status": "open",
+      "depends_on": [
+        "bootstrap-json",
+        "sync-json",
+        "deps-json"
+      ],
+      "estimate_minutes": 15,
+      "acceptance": "- Runs bootstrap, sync, deps phases sequentially\n- All phases always run (no abort on failure)\n- Repos cloned in bootstrap treated as up_to_date in sync\n- --dry-run: bootstrap+sync previewed, deps skipped, exit 0\n- --no-deps: deps phase skipped entirely\n- --filter applied to all phases\n- Human mode: 3 sections with == headers + combined summary\n- JSON mode: UpResult with 3 sub-objects\n- Exit code: highest across phases",
+      "source_sections": null,
+      "source_lines": "371-445",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "manifest-hints",
+      "title": "Add hints to manifest validation errors",
+      "description": "Wrap manifest errors with contextual HintError",
+      "status": "open",
+      "depends_on": [
+        "root-hint-handler"
+      ],
+      "estimate_minutes": 8,
+      "acceptance": "- Manifest file not found returns HintError with manifest init suggestion\n- Missing base_dir returns HintError\n- Invalid repo format returns HintError\n- Duplicate repo returns HintError\n- All commands that load manifest benefit from these hints",
+      "source_sections": null,
+      "source_lines": "300-316",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "json-integration-tests",
+      "title": "JSON integration tests per command",
+      "description": "9 integration tests from spec 9.3",
+      "status": "open",
+      "depends_on": [
+        "status-json",
+        "bootstrap-json",
+        "sync-json",
+        "deps-json",
+        "archive-json",
+        "list-json"
+      ],
+      "estimate_minutes": 15,
+      "acceptance": "- Test #1: status --json valid JSON with correct exit_code\n- Test #2: status --json not cloned repo has cloned:false, no branch fields\n- Test #3: bootstrap --json has action per repo\n- Test #4: sync --json dirty repo has action:skipped, reason:dirty, dirty_files\n- Test #5: deps --json missing repo has status:skipped, reason:not_on_disk\n- Test #6: archive --json last_commit is RFC 3339\n- Test #7: error --json has error+hint, no summary/repos\n- Test #8: compact --json no repos field\n- Test #9: dry-run --json has dry_run:true and would_clone actions",
+      "source_sections": null,
+      "source_lines": "613-625",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "up-tests",
+      "title": "Up command tests",
+      "description": "6 tests from spec 9.4",
+      "status": "open",
+      "depends_on": [
+        "cmd-up"
+      ],
+      "estimate_minutes": 12,
+      "acceptance": "- Test #1: up runs all 3 phases\n- Test #2: up --dry-run previews bootstrap+sync, deps omitted, exit 0\n- Test #3: up --no-deps omits deps section\n- Test #4: up --json returns UpResult with 3 sub-objects\n- Test #5: up with bootstrap failure exits 2\n- Test #6: up with sync dirty repos still runs deps, exit 1",
+      "source_sections": null,
+      "source_lines": "627-638",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    },
+    {
+      "id": "hint-tests",
+      "title": "Hint error tests",
+      "description": "3 hint tests from spec 9.5",
+      "status": "open",
+      "depends_on": [
+        "manifest-hints"
+      ],
+      "estimate_minutes": 8,
+      "acceptance": "- Test #1: missing manifest path produces error with hint text\n- Test #2: --json + invalid manifest returns JSON with error and hint fields\n- Test #3: human mode invalid manifest shows error: and hint: on stderr",
+      "source_sections": null,
+      "source_lines": "640-645",
+      "started_at": null,
+      "closed_at": null,
+      "closed_reason": null,
+      "gate_passed_at": null,
+      "commit_sha": null
+    }
+  ]
+}

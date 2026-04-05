@@ -45,9 +45,12 @@ func IsRepo(path string) bool {
 // Clone runs "git clone <url> <path>".
 func Clone(url, path string) error {
 	cmd := exec.Command("git", "clone", url, path)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git clone: %w\n%s", err, stderr.String())
+	}
+	return nil
 }
 
 // Status returns the current status of the git repository at path.
@@ -82,7 +85,7 @@ func Status(path string) (RepoStatus, error) {
 	}
 
 	// --- Ahead / Behind ---
-	revOut, err := runGit(path, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
+	revOut, err := runGit(path, "rev-list", "--left-right", "--count", s.Branch+"..."+s.Branch+"@{upstream}")
 	if err != nil {
 		// No upstream configured.
 		s.HasUpstream = false
@@ -147,7 +150,7 @@ func Pull(path string) (PullResult, error) {
 		if strings.Contains(stderr, "diverged") || strings.Contains(strings.ToLower(stderr), "not possible to fast-forward") {
 			return PullResult{}, ErrDiverged
 		}
-		if strings.Contains(stderr, "no tracking information") || strings.Contains(stderr, "no such ref") {
+		if strings.Contains(stderr, "no tracking information") || strings.Contains(stderr, "no such ref") || strings.Contains(stderr, "has no upstream branch") {
 			return PullResult{}, ErrNoUpstream
 		}
 		return PullResult{}, fmt.Errorf("git pull --ff-only: %w\n%s", err, stderr)

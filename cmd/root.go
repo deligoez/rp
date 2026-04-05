@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/deligoez/rp/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -45,12 +46,15 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// 4. Validate concurrency >= 1
+		// 4. Wire --no-color to ui package
+		ui.SetNoColor(NoColor)
+
+		// 5. Validate concurrency >= 1
 		if Concurrency < 1 {
 			return fmt.Errorf("--concurrency must be >= 1, got %d", Concurrency)
 		}
 
-		// 5. Expand ~ in ManifestPath
+		// 6. Expand ~ in ManifestPath
 		if strings.HasPrefix(ManifestPath, "~/") {
 			home, err := os.UserHomeDir()
 			if err != nil {

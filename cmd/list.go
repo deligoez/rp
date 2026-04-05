@@ -199,9 +199,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Summary.
-	missingStr := ui.Plural(totalMissing, "missing")
 	totalStr := ui.Plural(totalRepos, "repo")
-	fmt.Printf("-- %s total, %s --\n", totalStr, missingStr)
+	fmt.Printf("-- %s total, %d missing --\n", totalStr, totalMissing)
 
 	if totalMissing > 0 {
 		os.Exit(1)

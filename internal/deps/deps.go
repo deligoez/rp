@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 )
@@ -14,9 +15,10 @@ func RunDeps(path string, commands []string) error {
 		cmd := exec.Command("sh", "-c", command)
 		cmd.Dir = path
 
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("command %q failed: %w\nstderr: %s", command, err, output)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("command %q failed: %w\n%s", command, err, stderr.String())
 		}
 	}
 

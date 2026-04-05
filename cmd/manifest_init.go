@@ -417,6 +417,18 @@ func addBoolPair(m *yaml.Node, key string, val bool) {
 // Main command handler
 // ---------------------------------------------------------------------------
 
+// tildeCollapse replaces the home directory prefix with ~.
+func tildeCollapse(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, home) {
+		return "~" + path[len(home):]
+	}
+	return path
+}
+
 func runManifestInit(cmd *cobra.Command, args []string) error {
 	// 1. Resolve --dir to an absolute path.
 	scanRoot, err := filepath.Abs(manifestInitDir)
@@ -488,7 +500,7 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Found %d repos:\n", len(discovered))
 		for _, r := range discovered {
 			label := fmt.Sprintf("%s/%s", r.ghOwner, r.repoName)
-			fmt.Printf("  %-30s %s\n", label, r.absPath)
+			fmt.Printf("  %-30s %s\n", label, tildeCollapse(r.absPath))
 		}
 		if skipped > 0 {
 			fmt.Printf("  (%d repos skipped — no GitHub remote)\n", skipped)

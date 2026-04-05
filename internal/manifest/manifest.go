@@ -270,8 +270,14 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 	// First pass: read "flat" so IsFlat is known when building repo entries.
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		if node.Content[i].Value == "flat" {
+			valNode := node.Content[i+1]
+			// Rule 6: flat must be a boolean. Check the YAML tag explicitly
+			// because yaml.v3 coerces strings like "yes"/"no" to bool silently.
+			if valNode.Kind != yaml.ScalarNode || (valNode.Tag != "!!bool" && valNode.Tag != "tag:yaml.org,2002:bool") {
+				return group, fmt.Errorf("flat must be a boolean, got %q (tag: %s)", valNode.Value, valNode.Tag)
+			}
 			var flat bool
-			if err := node.Content[i+1].Decode(&flat); err != nil {
+			if err := valNode.Decode(&flat); err != nil {
 				return group, fmt.Errorf("flat must be a boolean: %w", err)
 			}
 			group.IsFlat = flat
@@ -315,6 +321,10 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 			var rawRepos []rawRepo
 			if err := valNode.Decode(&rawRepos); err != nil {
 				return group, fmt.Errorf("category %q must be a list of repo entries: %w", key, err)
+			}
+			// Rule 8: categories must contain a non-empty list.
+			if len(rawRepos) == 0 {
+				return group, fmt.Errorf("category %q has an empty repo list", key)
 			}
 			for _, r := range rawRepos {
 				entry := RepoEntry{

@@ -105,7 +105,7 @@ var bootstrapCmd = &cobra.Command{
 					fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), ui.SymbolOK()+" cloned")
 				case bsAlreadyExists:
 					existed++
-					fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), ui.SymbolOK()+" already exists")
+					fmt.Printf("  %s  already exists\n", ui.PadRight(label, 24))
 				case bsFailed:
 					failed++
 					fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), ui.SymbolError()+" FAILED: "+res.ErrMsg)

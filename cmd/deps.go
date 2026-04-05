@@ -142,10 +142,10 @@ var depsCmd = &cobra.Command{
 				repoFailed := false
 				for _, cr := range res.results {
 					if cr.failed {
-						fmt.Printf("  %s %s: %s (exit code 1)\n",
+						fmt.Printf("  %s FAILED: %s (%s)\n",
 							paddedLabel,
-							ui.SymbolError(),
 							cr.command,
+							cr.errMsg,
 						)
 						repoFailed = true
 						anyFailed = true
@@ -169,9 +169,9 @@ var depsCmd = &cobra.Command{
 		// Summary line.
 		fmt.Println()
 		fmt.Println(ui.SummaryLine(
-			fmt.Sprintf("%s succeeded, %s failed",
+			fmt.Sprintf("%s succeeded, %d failed",
 				ui.Plural(succeeded, "repo"),
-				ui.Plural(failed, "repo"),
+				failed,
 			),
 		))
 

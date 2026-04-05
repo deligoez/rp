@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:58.161161Z",
+  "updated_at": "2026-04-05T15:12:58.200844Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -461,7 +461,7 @@
       "id": "cmd-manifest-init",
       "title": "Manifest init command implementation",
       "description": "Scan directory tree, generate manifest YAML",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-structs",
         "cmd-root"
@@ -470,11 +470,11 @@
       "acceptance": "- Walks max depth 4, skips .git dirs and symlinks\n- Parses SSH/HTTPS GitHub URLs (with/without .git)\n- Skips non-GitHub, reports to stderr\n- Infers flat/categorized per owner; mixed -\u003e repos fallback + warning\n- --output existing file = abort\n- --dry-run shows discovered repos\n- Exit 0 or 2",
       "source_sections": null,
       "source_lines": "329-361",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:58.165748Z",
+      "closed_at": "2026-04-05T15:12:58.200839Z",
+      "closed_reason": "Manifest init: walks max depth 4, skips .git dirs and symlinks. Parses SSH/HTTPS GitHub URLs with/without .git suffix. Skips non-GitHub to stderr. Groups by owner. Infers flat/categorized via ancestor dir matching (case-insensitive), mixed→repos fallback+warning. --output existing file aborts. --dry-run shows repos. Exit 0 or 2.",
+      "gate_passed_at": "2026-04-05T15:12:58.200839Z",
+      "commit_sha": "6bb7f19"
     }
   ]
 }
