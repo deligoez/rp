@@ -916,3 +916,93 @@ func TestHintHumanModeStderr(t *testing.T) {
 		t.Errorf("expected stderr to contain 'hint:', got:\n%s", stderr)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 9.2 Filter Tests #6 and #7
+// ---------------------------------------------------------------------------
+
+func TestFilterWithJSON(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create two repos under different owners.
+	repo1 := initGitRepo(t, filepath.Join(dir, "repos", "repo1"))
+	_ = initGitRepo(t, filepath.Join(dir, "repos", "repo2"))
+	_ = repo1
+
+	manifest := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s/repos
+owners:
+  alice:
+    flat: true
+    repos:
+      - repo: alice/repo1
+  bob:
+    flat: true
+    repos:
+      - repo: bob/repo2
+`, dir))
+
+	binary := filepath.Join(testBinaryDir, "rp")
+	result := runRPJSON(t, binary, manifest, "list", "--filter", "alice/")
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("repos is not an array: %v", result["repos"])
+	}
+
+	// Should only contain alice's repos.
+	for _, r := range repos {
+		repo := r.(map[string]interface{})
+		owner, _ := repo["owner"].(string)
+		if owner != "alice" {
+			t.Errorf("expected only alice repos, got owner=%s", owner)
+		}
+	}
+}
+
+func TestFilterDepsPositionalOverridesFilter(t *testing.T) {
+	dir := t.TempDir()
+
+	repoPath := initGitRepo(t, filepath.Join(dir, "repos", "myrepo"))
+	_ = repoPath
+
+	manifest := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s/repos
+owners:
+  me:
+    flat: true
+    repos:
+      - repo: me/myrepo
+        deps:
+          - echo hello
+`, dir))
+
+	binary := filepath.Join(testBinaryDir, "rp")
+
+	// Run deps with both --filter and a positional arg.
+	args := []string{"--json", "--manifest", manifest, "--filter", "nonexistent/", "deps", "me/myrepo"}
+	cmd := exec.Command(binary, args...)
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+	out, _ := cmd.Output()
+
+	// The positional arg should win, so we get a result (not empty/error from filter).
+	if len(out) == 0 {
+		t.Fatalf("expected JSON output, got empty")
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	}
+
+	// Should have processed the repo (positional wins).
+	if result["command"] != "deps" {
+		t.Errorf("expected command=deps, got %v", result["command"])
+	}
+
+	// Stderr should contain a warning about --filter being ignored.
+	stderr := stderrBuf.String()
+	if !strings.Contains(stderr, "warning") || !strings.Contains(stderr, "filter") {
+		t.Errorf("expected stderr warning about filter being ignored, got: %s", stderr)
+	}
+}
