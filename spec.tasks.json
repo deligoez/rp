@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:12:48.059229Z",
+  "updated_at": "2026-04-05T15:12:48.099293Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -355,7 +355,7 @@
       "id": "cmd-sync",
       "title": "Sync command implementation",
       "description": "Pull clean repos, skip dirty/unpushed, clone missing",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "manifest-load",
         "git-status",
@@ -368,11 +368,11 @@
       "acceptance": "- Behavior order: not-cloned-\u003eclone, non-git-\u003eerror, dirty-\u003eskip, unpushed(if upstream)-\u003eskip, clean-\u003epull\n- Distinguishes ErrDiverged/ErrNoUpstream/generic via errors.Is()\n- Workers continue on clone failure\n- --dry-run shows would-do format\n- Exit 0/1/2 highest-wins",
       "source_sections": null,
       "source_lines": "137-189",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:12:48.063941Z",
+      "closed_at": "2026-04-05T15:12:48.099288Z",
+      "closed_reason": "Sync command: behavior per repo first-match-wins order. Not cloned→clone, non-git→error, dirty→skip (precedence over unpushed), unpushed(if upstream)→skip, clean→pull ff-only. Distinguishes ErrDiverged/ErrNoUpstream via errors.Is. Workers continue on failure. --dry-run shows would-do format. Exit 0/1/2 highest-wins.",
+      "gate_passed_at": "2026-04-05T15:12:48.099288Z",
+      "commit_sha": "dacba9a"
     },
     {
       "id": "cmd-status",
