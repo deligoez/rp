@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:05:57.809378Z",
+  "updated_at": "2026-04-05T15:05:57.848575Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -172,7 +172,7 @@
       "id": "git-status",
       "title": "Git Status function",
       "description": "Implement Status with dirty count, branch, ahead/behind, detached HEAD fallback",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "git-clone-isrepo"
       ],
@@ -180,11 +180,11 @@
       "acceptance": "- Status(path) returns RepoStatus{Clean, DirtyFiles, Branch, Ahead, Behind, HasUpstream}\n- Uses git status --porcelain for dirty count (all lines)\n- Branch via git symbolic-ref --short HEAD, fallback to git rev-parse --short HEAD on detached HEAD\n- Ahead/behind via git rev-list --left-right --count; HasUpstream=false with Ahead=0 Behind=0 when no tracking\n- Tests #3, #4, #7, #11, #12, #13 pass",
       "source_sections": null,
       "source_lines": "383-389,461-477",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:05:57.814311Z",
+      "closed_at": "2026-04-05T15:05:57.848571Z",
+      "closed_reason": "Status(path) returns RepoStatus with Clean, DirtyFiles, Branch, Ahead, Behind, HasUpstream. Uses git status --porcelain for dirty count, symbolic-ref --short HEAD with rev-parse fallback for detached HEAD, rev-list --left-right --count for ahead/behind. HasUpstream=false with Ahead=0 Behind=0 when no tracking. Tests #3,#4,#7,#11,#12,#13 all pass.",
+      "gate_passed_at": "2026-04-05T15:05:57.848571Z",
+      "commit_sha": "633e91f"
     },
     {
       "id": "git-pull",
