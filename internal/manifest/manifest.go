@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// repoPattern enforces {owner}/{name} with alphanumeric, hyphens, underscores, dots only.
+var repoPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$`)
 
 // expandTilde replaces a leading ~ with the user's home directory.
 func expandTilde(path string) (string, error) {
@@ -74,6 +78,87 @@ func (m *Manifest) Owners() []OwnerGroup {
 	return m.owners
 }
 
+// isValidName checks that a name (owner or category) is a safe directory component:
+// non-empty, no forward slash, not "..", and contains no null bytes.
+func isValidName(name string) bool {
+	return name != "" && name != ".." && !strings.Contains(name, "/") && !strings.Contains(name, "\x00")
+}
+
+// validate checks all manifest rules and returns the first error found.
+func (m *Manifest) validate() error {
+	// Rule 1: base_dir must be present and non-empty.
+	if m.BaseDir == "" {
+		return fmt.Errorf("manifest: base_dir must be present and non-empty")
+	}
+
+	// Rule 5: at least one owner with at least one repo must exist.
+	totalRepos := 0
+	for _, owner := range m.owners {
+		totalRepos += len(owner.Repos)
+	}
+	if len(m.owners) == 0 || totalRepos == 0 {
+		return fmt.Errorf("manifest: at least one owner with at least one repo is required")
+	}
+
+	seen := make(map[string]bool)
+
+	for _, owner := range m.owners {
+		// Rule 4: owner names must be valid directory names.
+		if !isValidName(owner.Name) {
+			return fmt.Errorf("manifest: invalid owner name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name)
+		}
+
+		// Track category names seen for this owner to check rule 8.
+		categoryRepos := make(map[string]int)
+		for _, entry := range owner.Repos {
+			if !entry.IsArchive {
+				categoryRepos[entry.Category]++
+			}
+		}
+
+		// Rule 8: categories must contain non-empty repo lists.
+		for cat, count := range categoryRepos {
+			if count == 0 {
+				return fmt.Errorf("manifest: owner %q category %q has an empty repo list", owner.Name, cat)
+			}
+		}
+
+		for _, entry := range owner.Repos {
+			// Rule 4: category names must be valid directory names.
+			// "archive" is allowed as a category (it is a reserved key that sets IsArchive).
+			if !entry.IsArchive {
+				if !isValidName(entry.Category) {
+					return fmt.Errorf("manifest: owner %q has invalid category name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name, entry.Category)
+				}
+				// Rule 6: "flat" cannot be used as a category name.
+				if entry.Category == "flat" {
+					return fmt.Errorf("manifest: owner %q uses reserved key %q as a category name", owner.Name, entry.Category)
+				}
+			}
+
+			// Rule 2: repo field must match {owner}/{name}.
+			if !repoPattern.MatchString(entry.Repo) {
+				return fmt.Errorf("manifest: repo %q does not match required pattern {owner}/{name} (alphanumeric, hyphens, underscores, dots only)", entry.Repo)
+			}
+
+			// Rule 3: no duplicate repos across entire manifest.
+			if seen[entry.Repo] {
+				return fmt.Errorf("manifest: duplicate repo %q", entry.Repo)
+			}
+			seen[entry.Repo] = true
+
+			// Rule 7: deps values must be non-empty strings.
+			for i, dep := range entry.Deps {
+				if dep == "" {
+					return fmt.Errorf("manifest: repo %q has an empty string at deps[%d]", entry.Repo, i)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // rawManifest is used for initial YAML decoding of the top-level structure.
 type rawManifest struct {
 	BaseDir string    `yaml:"base_dir"`
@@ -99,8 +184,14 @@ func Load(path string) (*Manifest, error) {
 		return nil, fmt.Errorf("parsing manifest YAML: %w", err)
 	}
 
+	// Expand tilde in base_dir before path resolution.
+	expandedBaseDir, err := expandTilde(raw.BaseDir)
+	if err != nil {
+		return nil, fmt.Errorf("expanding base_dir: %w", err)
+	}
+
 	m := &Manifest{
-		BaseDir: raw.BaseDir,
+		BaseDir: expandedBaseDir,
 	}
 
 	if raw.Owners.Kind != 0 {
@@ -109,6 +200,24 @@ func Load(path string) (*Manifest, error) {
 			return nil, fmt.Errorf("parsing owners: %w", err)
 		}
 		m.owners = owners
+	}
+
+	// Resolve local paths for every repo entry now that BaseDir is expanded.
+	for i := range m.owners {
+		owner := &m.owners[i]
+		for j := range owner.Repos {
+			entry := &owner.Repos[j]
+			// repo field is "{github_owner}/{repo_name}"; we need just the repo_name part.
+			repoName := entry.Repo
+			if idx := strings.LastIndex(entry.Repo, "/"); idx >= 0 {
+				repoName = entry.Repo[idx+1:]
+			}
+			entry.LocalPath = resolvePath(m.BaseDir, owner.Name, entry.Category, repoName, entry.IsFlat, entry.IsArchive)
+		}
+	}
+
+	if err := m.validate(); err != nil {
+		return nil, err
 	}
 
 	return m, nil
