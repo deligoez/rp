@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T15:58:31.977157Z",
+  "updated_at": "2026-04-05T15:59:29.48035Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -112,7 +112,7 @@
       "id": "root-hint-handler",
       "title": "Root command HintError handler",
       "description": "Handle HintError in root Execute() for both JSON and human modes",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-json-flags"
       ],
@@ -120,11 +120,11 @@
       "acceptance": "- Root Execute checks returned error for *HintError\n- JSON mode: prints ErrorResult JSON with error and hint fields\n- Human mode: prints 'error:' and 'hint:' lines to stderr\n- Non-HintError in JSON mode: prints ErrorResult without hint\n- Exit code 2 for all error paths",
       "source_sections": null,
       "source_lines": "300-338",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T15:59:29.43663Z",
+      "closed_at": "2026-04-05T15:59:29.480347Z",
+      "closed_reason": "Execute() now checks output.IsJSON() — JSON mode calls PrintErrorAndExit with ErrorResult including hint. Human mode calls FormatHumanError showing 'error:' and 'hint:' lines on stderr. Non-HintError in JSON mode produces ErrorResult without hint. Exit code 2 for all error paths.",
+      "gate_passed_at": "2026-04-05T15:59:29.480347Z",
+      "commit_sha": "bc3b3c2"
     },
     {
       "id": "filter-logic",
