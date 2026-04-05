@@ -1,0 +1,21 @@
+# Binary
+rp
+dist/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Test
+*.test
+coverage.out
+
+# tp task files
+*.tasks.json
+*.tasks.json.lock
+*.ndjson
