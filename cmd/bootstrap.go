@@ -282,6 +282,15 @@ func runBootstrapDryRunJSON(repos []manifest.RepoEntry) error {
 	return nil
 }
 
+// processBootstrapDryRun checks what would happen without cloning.
+func processBootstrapDryRun(entry manifest.RepoEntry) bootstrapResult {
+	info, err := os.Stat(entry.LocalPath)
+	if err == nil && info.IsDir() && git.IsRepo(entry.LocalPath) {
+		return bootstrapResult{Entry: entry, Status: bsWouldSkip}
+	}
+	return bootstrapResult{Entry: entry, Status: bsWouldClone}
+}
+
 // processBootstrapEntry determines what to do with a single repo entry and does it.
 func processBootstrapEntry(entry manifest.RepoEntry) bootstrapResult {
 	info, err := os.Stat(entry.LocalPath)

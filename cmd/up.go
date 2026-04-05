@@ -62,6 +62,9 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		Concurrency,
 		worker.PoolOptions{Verb: "cloning"},
 		func(entry manifest.RepoEntry) (bootstrapResult, error) {
+			if upDryRun {
+				return processBootstrapDryRun(entry), nil
+			}
 			return processBootstrapEntry(entry), nil
 		},
 	)
