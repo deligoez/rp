@@ -2,7 +2,7 @@
   "version": 1,
   "spec": "spec-ax.md",
   "created_at": "0001-01-01T00:00:00Z",
-  "updated_at": "2026-04-05T16:09:05.484792Z",
+  "updated_at": "2026-04-05T16:09:05.524745Z",
   "workflow": {
     "quality_gate": "cd /Users/deligoez/Developer/github/deligoez/rp \u0026\u0026 go build ./... \u0026\u0026 go test ./... \u0026\u0026 go vet ./..."
   },
@@ -318,7 +318,7 @@
       "id": "manifest-hints",
       "title": "Add hints to manifest validation errors",
       "description": "Wrap manifest errors with contextual HintError",
-      "status": "open",
+      "status": "done",
       "depends_on": [
         "root-hint-handler"
       ],
@@ -326,11 +326,11 @@
       "acceptance": "- Manifest file not found returns HintError with manifest init suggestion\n- Missing base_dir returns HintError\n- Invalid repo format returns HintError\n- Duplicate repo returns HintError\n- All commands that load manifest benefit from these hints",
       "source_sections": null,
       "source_lines": "300-316",
-      "started_at": null,
-      "closed_at": null,
-      "closed_reason": null,
-      "gate_passed_at": null,
-      "commit_sha": null
+      "started_at": "2026-04-05T16:09:05.489482Z",
+      "closed_at": "2026-04-05T16:09:05.52474Z",
+      "closed_reason": "Manifest Load wraps file-not-found with 'create manifest with rp manifest init' hint. YAML parse errors wrapped with 'check manifest syntax at path' hint. validate wraps missing base_dir, invalid repo format, duplicate repo with contextual hints. deps.go repo-not-found gets 'check repo name available rp list --json' hint. manifest_init output-file-exists gets 'delete path first or use stdout' hint.",
+      "gate_passed_at": "2026-04-05T16:09:05.52474Z",
+      "commit_sha": "0b189d2"
     },
     {
       "id": "json-integration-tests",
