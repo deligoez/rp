@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -11,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time via ldflags.
-var Version = "dev"
+// Version is set at build time via ldflags, or auto-detected from module info.
+var Version = version()
 
 // Exported package-level variables so subcommands can read the resolved values.
 var (
@@ -144,4 +145,12 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, output.FormatHumanError(err))
 		os.Exit(2)
 	}
+}
+
+// version returns the module version from build info, falling back to "dev".
+func version() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
 }
