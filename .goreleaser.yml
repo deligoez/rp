@@ -5,7 +5,7 @@ project_name: rp
 before:
   hooks:
     - go mod tidy
-    - go test ./...
+    - go test -short ./...
 
 builds:
   - main: .

@@ -2020,10 +2020,16 @@ owners:
 // Discover Tests
 // ---------------------------------------------------------------------------
 
-// ghAvailable returns true if gh CLI is installed and authenticated.
-func ghAvailable() bool {
+// skipWithoutGh skips the test if gh CLI is not available or -short is set.
+func skipWithoutGh(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping gh-dependent test in short mode")
+	}
 	cmd := exec.Command("gh", "auth", "status")
-	return cmd.Run() == nil
+	if cmd.Run() != nil {
+		t.Skip("gh CLI not available")
+	}
 }
 
 // TestDiscoverGhNotFound verifies exit 2 + hint when gh is not in PATH.
@@ -2069,9 +2075,7 @@ owners:
 
 // TestDiscoverJSONSchema verifies JSON structure with real gh.
 func TestDiscoverJSONSchema(t *testing.T) {
-	if !ghAvailable() {
-		t.Skip("gh CLI not available")
-	}
+	skipWithoutGh(t)
 	binary := binaryForTest(t)
 	base := t.TempDir()
 	repoDir := filepath.Join(base, "nobody", "nonexistent")
@@ -2127,9 +2131,7 @@ owners:
 
 // TestDiscoverCompact verifies --compact omits repos key.
 func TestDiscoverCompact(t *testing.T) {
-	if !ghAvailable() {
-		t.Skip("gh CLI not available")
-	}
+	skipWithoutGh(t)
 	binary := binaryForTest(t)
 	base := t.TempDir()
 	repoDir := filepath.Join(base, "nobody", "nonexistent")
@@ -2156,9 +2158,7 @@ owners:
 
 // TestDiscoverFilterNonexistent verifies --filter with no matches returns exit 0.
 func TestDiscoverFilterNonexistent(t *testing.T) {
-	if !ghAvailable() {
-		t.Skip("gh CLI not available")
-	}
+	skipWithoutGh(t)
 	binary := binaryForTest(t)
 	base := t.TempDir()
 	repoDir := filepath.Join(base, "nobody", "nonexistent")
@@ -2189,9 +2189,7 @@ owners:
 
 // TestDiscoverExitCode1 verifies exit 1 when untracked repos exist.
 func TestDiscoverExitCode1(t *testing.T) {
-	if !ghAvailable() {
-		t.Skip("gh CLI not available")
-	}
+	skipWithoutGh(t)
 	binary := binaryForTest(t)
 	base := t.TempDir()
 	repoDir := filepath.Join(base, "nobody", "nonexistent")
