@@ -6,11 +6,20 @@ Repo manager CLI — organize, sync, and bootstrap your Developer workspace.
 
 ## Install
 
+### Homebrew (recommended)
+
+```bash
+brew tap deligoez/tap
+brew install rp
+```
+
+### Go
+
 ```bash
 go install github.com/deligoez/rp@latest
 ```
 
-Or build from source:
+### Build from source
 
 ```bash
 git clone git@github.com:deligoez/rp.git

@@ -14,6 +14,13 @@ rp is designed for both human and AI agent users. The `--json` flag enables stru
 - Actionable error hints in both JSON and human output
 - Exit codes: 0=success, 1=attention needed, 2=hard error
 
+## Install
+
+```bash
+brew tap deligoez/tap && brew install rp   # Homebrew
+go install github.com/deligoez/rp@latest   # or Go
+```
+
 ## Quick Reference
 
 ```bash
