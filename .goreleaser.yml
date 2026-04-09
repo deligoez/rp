@@ -40,6 +40,20 @@ archives:
 checksum:
   name_template: checksums.txt
 
+brews:
+  - repository:
+      owner: deligoez
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: goreleaser
+      email: goreleaser@users.noreply.github.com
+    homepage: https://github.com/deligoez/rp
+    description: "Repo manager CLI — organize, sync, and bootstrap your Developer workspace"
+    license: "MIT"
+    test: |
+      assert_match "rp version", shell_output("#{bin}/rp --version")
+
 changelog:
   sort: asc
   filters:
