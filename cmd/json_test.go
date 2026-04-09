@@ -401,42 +401,6 @@ owners:
 // Test 6: Archive JSON date — last_commit is RFC 3339
 // ---------------------------------------------------------------------------
 
-func TestJSONArchiveDateFormat(t *testing.T) {
-	binary := binaryForTest(t)
-	base := t.TempDir()
-
-	repoDir := filepath.Join(base, "owner", "projects", "stale")
-	initGitRepo(t, repoDir)
-
-	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
-base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/stale
-`, base))
-
-	// Use threshold=0 so any repo (including freshly created) shows as a candidate.
-	result := runRPJSON(t, binary, manifest, "archive", "--threshold", "0")
-
-	assertString(t, result, "command", "archive")
-
-	repos := assertKey(t, result, "repos").([]interface{})
-	if len(repos) < 1 {
-		t.Fatal("expected at least 1 archive candidate (threshold=0)")
-	}
-
-	repo := repos[0].(map[string]interface{})
-	lastCommit, ok := repo["last_commit"].(string)
-	if !ok || lastCommit == "" {
-		t.Fatalf("expected last_commit string, got %v", repo["last_commit"])
-	}
-
-	// Must parse as RFC 3339.
-	if _, err := time.Parse(time.RFC3339, lastCommit); err != nil {
-		t.Errorf("last_commit %q is not RFC 3339: %v", lastCommit, err)
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Test 7: Error JSON — bad manifest path → error and hint fields present,
@@ -1019,13 +983,9 @@ func TestFilterWithJSON(t *testing.T) {
 base_dir: %s/repos
 owners:
   alice:
-    flat: true
-    repos:
-      - repo: alice/repo1
+    - repo: alice/repo1
   bob:
-    flat: true
-    repos:
-      - repo: bob/repo2
+    - repo: bob/repo2
 `, dir))
 
 	binary := filepath.Join(testBinaryDir, "rp")
@@ -1056,11 +1016,9 @@ func TestFilterDepsPositionalOverridesFilter(t *testing.T) {
 base_dir: %s/repos
 owners:
   me:
-    flat: true
-    repos:
-      - repo: me/myrepo
-        deps:
-          - echo hello
+    - repo: me/myrepo
+      deps:
+        - echo hello
 `, dir))
 
 	binary := filepath.Join(testBinaryDir, "rp")
@@ -1930,28 +1888,6 @@ owners:
 // TestHintFlatNonBool: manifest with flat: 42 (a non-boolean value).
 // Running `list --json` should fail manifest validation and return a non-empty
 // hint field explaining the problem.
-func TestHintFlatNonBool(t *testing.T) {
-	binary := binaryForTest(t)
-
-	dir := t.TempDir()
-	manifest := writeManifest(t, dir, fmt.Sprintf(`
-base_dir: %s
-owners:
-  owner:
-    flat: 42
-    projects:
-      - repo: owner/myrepo
-`, dir))
-
-	result := runRPJSON(t, binary, manifest, "list")
-
-	assertKey(t, result, "error")
-
-	hint, ok := result["hint"].(string)
-	if !ok || hint == "" {
-		t.Fatalf("expected non-empty hint field for flat:42 manifest, got %v", result["hint"])
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Test 8 (new): list --json with deps: [""] (empty string dep) → hint present
@@ -2033,9 +1969,7 @@ func TestQA_UpDryRunDoesNotClone(t *testing.T) {
 base_dir: %s
 owners:
   test:
-    flat: true
-    repos:
-      - repo: test/repo
+    - repo: test/repo
 `, wsDir))
 
 	result := runUpJSON(t, binary, manifest, "--dry-run")

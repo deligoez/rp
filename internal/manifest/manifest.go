@@ -33,11 +33,13 @@ func expandTilde(path string) (string, error) {
 //   - Categorized archive (isFlat=false, isArchive=true): {baseDir}/{owner}/archive/{repoName}
 //   - Flat (isFlat=true, isArchive=false):              {baseDir}/{owner}/{repoName}
 //   - Flat archive (isFlat=true, isArchive=true):       {baseDir}/{owner}/archive/{repoName}
-func resolvePath(baseDir, owner, category, repoName string, isFlat, isArchive bool) string {
-	if isArchive {
-		return filepath.Join(baseDir, owner, "archive", repoName)
-	}
-	if isFlat {
+// resolvePath computes the absolute local path for a repo entry.
+//
+// Rules:
+//   - Flat (category == ""):    {baseDir}/{owner}/{repoName}
+//   - Categorized:              {baseDir}/{owner}/{category}/{repoName}
+func resolvePath(baseDir, owner, category, repoName string) string {
+	if category == "" {
 		return filepath.Join(baseDir, owner, repoName)
 	}
 	return filepath.Join(baseDir, owner, category, repoName)
@@ -49,8 +51,6 @@ type RepoEntry struct {
 	Category  string   // e.g. "projects", empty for flat
 	LocalPath string   // resolved absolute path
 	CloneURL  string   // git@github.com:{repo}.git
-	IsArchive bool
-	IsFlat    bool
 	Deps      []string // shell commands from manifest
 }
 
@@ -116,16 +116,9 @@ func (m *Manifest) validate() error {
 		}
 
 		for _, entry := range owner.Repos {
-			// Rule 4: category names must be valid directory names.
-			// "archive" is allowed as a category (it is a reserved key that sets IsArchive).
-			if !entry.IsArchive {
-				if !isValidName(entry.Category) {
-					return fmt.Errorf("manifest: owner %q has invalid category name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name, entry.Category)
-				}
-				// Rule 6: "flat" cannot be used as a category name.
-				if entry.Category == "flat" {
-					return fmt.Errorf("manifest: owner %q uses reserved key %q as a category name", owner.Name, entry.Category)
-				}
+			// Rule 4: category names must be valid directory names (skip for flat repos).
+			if entry.Category != "" && !isValidName(entry.Category) {
+				return fmt.Errorf("manifest: owner %q has invalid category name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name, entry.Category)
 			}
 
 			// Rule 2: repo field must match {owner}/{name}.
@@ -222,7 +215,7 @@ func Load(path string) (*Manifest, error) {
 			if idx := strings.LastIndex(entry.Repo, "/"); idx >= 0 {
 				repoName = entry.Repo[idx+1:]
 			}
-			entry.LocalPath = resolvePath(m.BaseDir, owner.Name, entry.Category, repoName, entry.IsFlat, entry.IsArchive)
+			entry.LocalPath = resolvePath(m.BaseDir, owner.Name, entry.Category, repoName)
 		}
 	}
 
@@ -270,72 +263,47 @@ func parseOwners(node *yaml.Node) ([]OwnerGroup, error) {
 
 // parseOwnerNode parses a single owner's value node into an OwnerGroup.
 // Keys are iterated in document order via yaml.Node to preserve YAML key order.
+// parseOwnerNode parses a single owner's value node into an OwnerGroup.
+// A SequenceNode means flat (repos listed directly), a MappingNode means categorized.
 func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 	group := OwnerGroup{Name: ownerName}
 
-	if node.Kind != yaml.MappingNode {
-		return group, fmt.Errorf("owner value must be a mapping, got kind %d", node.Kind)
-	}
-
-	// First pass: read "flat" so IsFlat is known when building repo entries.
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == "flat" {
-			valNode := node.Content[i+1]
-			// Rule 6: flat must be a boolean. Check the YAML tag explicitly
-			// because yaml.v3 coerces strings like "yes"/"no" to bool silently.
-			if valNode.Kind != yaml.ScalarNode || (valNode.Tag != "!!bool" && valNode.Tag != "tag:yaml.org,2002:bool") {
-				return group, output.NewHintError(
-					fmt.Errorf("flat must be a boolean, got %q (tag: %s)", valNode.Value, valNode.Tag),
-					"flat must be true or false, e.g. flat: true",
-				)
-			}
-			var flat bool
-			if err := valNode.Decode(&flat); err != nil {
-				return group, fmt.Errorf("flat must be a boolean: %w", err)
-			}
-			group.IsFlat = flat
-			break
+	switch node.Kind {
+	case yaml.SequenceNode:
+		// Flat owner: repos listed directly as a sequence.
+		group.IsFlat = true
+		var rawRepos []rawRepo
+		if err := node.Decode(&rawRepos); err != nil {
+			return group, fmt.Errorf("flat owner must be a list of repo entries: %w", err)
 		}
-	}
-
-	// Second pass: iterate all keys in order to build repo entries.
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
-
-		key := keyNode.Value
-
-		switch key {
-		case "flat":
-			// Already handled in first pass.
-			continue
-
-		case "archive":
-			var rawRepos []rawRepo
-			if err := valNode.Decode(&rawRepos); err != nil {
-				return group, fmt.Errorf("archive must be a list of repo entries: %w", err)
+		if len(rawRepos) == 0 {
+			return group, output.NewHintError(
+				fmt.Errorf("owner %q has an empty repo list", ownerName),
+				"add at least one repo entry, or remove the owner",
+			)
+		}
+		for _, r := range rawRepos {
+			entry := RepoEntry{
+				Repo:     r.Repo,
+				Owner:    ownerName,
+				Category: "",
+				CloneURL: "git@github.com:" + r.Repo + ".git",
+				Deps:     r.Deps,
 			}
-			for _, r := range rawRepos {
-				entry := RepoEntry{
-					Repo:      r.Repo,
-					Owner:     ownerName,
-					Category:  "archive",
-					CloneURL:  "git@github.com:" + r.Repo + ".git",
-					IsArchive: true,
-					IsFlat:    group.IsFlat,
-					Deps:      r.Deps,
-					LocalPath: "",
-				}
-				group.Repos = append(group.Repos, entry)
-			}
+			group.Repos = append(group.Repos, entry)
+		}
 
-		default:
-			// Treat as a category name.
+	case yaml.MappingNode:
+		// Categorized owner: keys are category names.
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			keyNode := node.Content[i]
+			valNode := node.Content[i+1]
+			key := keyNode.Value
+
 			var rawRepos []rawRepo
 			if err := valNode.Decode(&rawRepos); err != nil {
 				return group, fmt.Errorf("category %q must be a list of repo entries: %w", key, err)
 			}
-			// Rule 8: categories must contain a non-empty list.
 			if len(rawRepos) == 0 {
 				return group, output.NewHintError(
 					fmt.Errorf("category %q has an empty repo list", key),
@@ -344,18 +312,21 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 			}
 			for _, r := range rawRepos {
 				entry := RepoEntry{
-					Repo:      r.Repo,
-					Owner:     ownerName,
-					Category:  key,
-					CloneURL:  "git@github.com:" + r.Repo + ".git",
-					IsArchive: false,
-					IsFlat:    group.IsFlat,
-					Deps:      r.Deps,
-					LocalPath: "",
+					Repo:     r.Repo,
+					Owner:    ownerName,
+					Category: key,
+					CloneURL: "git@github.com:" + r.Repo + ".git",
+					Deps:     r.Deps,
 				}
 				group.Repos = append(group.Repos, entry)
 			}
 		}
+
+	default:
+		return group, output.NewHintError(
+			fmt.Errorf("owner %q must be a mapping (categorized) or sequence (flat), got YAML kind %d", ownerName, node.Kind),
+			"use a mapping for categorized owners or a sequence for flat owners",
+		)
 	}
 
 	return group, nil

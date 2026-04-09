@@ -114,16 +114,6 @@ func TestQA_FilterOverlappingNoDupes(t *testing.T) {
 }
 
 // QA-R13: Filter on archive repo by exact match
-func TestQA_FilterArchiveRepo(t *testing.T) {
-	repos := []manifest.RepoEntry{
-		{Repo: "owner/regular", Owner: "owner"},
-		{Repo: "owner/archived", Owner: "owner", IsArchive: true},
-	}
-	result := manifest.FilterRepos(repos, []string{"owner/archived"})
-	if len(result) != 1 || result[0].Repo != "owner/archived" {
-		t.Errorf("expected only owner/archived, got %v", result)
-	}
-}
 
 // QA-R14: FilterOwners removes empty owner groups
 func TestQA_FilterOwnersRemovesEmpty(t *testing.T) {

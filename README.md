@@ -47,7 +47,7 @@ The manifest lives at `~/.config/rp/manifest.yaml` (override with `-m` or `RP_MA
 base_dir: ~/Developer
 
 owners:
-  acme:
+  acme:                              # mapping → categorized
     services:
       - repo: acme/api
         deps:
@@ -57,37 +57,28 @@ owners:
           - npm install
     libraries:
       - repo: acme/shared-utils
-    archive:
-      - repo: acme/legacy-app
 
-  opensource:
-    flat: true
-    repos:
-      - repo: opensource/design-system
-      - repo: opensource/cli-tools
-        deps:
-          - cargo build
-    archive:
-      - repo: opensource/old-website
+  opensource:                        # sequence → flat
+    - repo: opensource/design-system
+    - repo: opensource/cli-tools
+      deps:
+        - cargo build
 
-  vendor:
-    flat: true
-    repos:
-      - repo: vendor/payments
-        deps:
-          - composer install
-          - npm install
+  vendor:                            # sequence → flat
+    - repo: vendor/payments
+      deps:
+        - composer install
+        - npm install
 ```
 
 ### Directory mapping
 
-| Mode | Category | Path |
-|------|----------|------|
-| Categorized | regular | `~/Developer/acme/services/api/` |
-| Categorized | archive | `~/Developer/acme/archive/legacy-app/` |
-| Flat (`flat: true`) | regular | `~/Developer/opensource/design-system/` |
-| Flat | archive | `~/Developer/opensource/archive/old-website/` |
+| Mode | Path |
+|------|------|
+| Categorized (mapping) | `~/Developer/acme/services/api/` |
+| Flat (sequence) | `~/Developer/opensource/design-system/` |
 
+Owner type is inferred from YAML structure: mapping = categorized, sequence = flat.
 Repos are cloned via SSH: `git@github.com:{owner}/{name}.git`
 
 ## Commands
@@ -120,20 +111,17 @@ Evaluation order per repo:
 ### rp status
 
 Show the state of every repo.
-
-```
 acme
   services/api               OK main
   services/web               !! main +2 ahead
   libraries/shared-utils     !! main ~3 dirty
-  archive/legacy-app         OK main
 
 opensource
   design-system              OK main
-  archive/old-website        XX not cloned
+  cli-tools                  XX not cloned
 
 -- Summary --
-4 OK, 2 need attention, 1 not cloned
+3 OK, 2 need attention, 1 not cloned
 ```
 
 ```bash
@@ -155,14 +143,7 @@ rp deps --dry-run                # preview what would run
 
 Commands are defined per repo in the manifest (`deps:` field) and run via `sh -c`.
 
-### rp archive
 
-Report repos that haven't been committed to in a while.
-
-```bash
-rp archive                       # repos with no commit in 365+ days
-rp archive --threshold 180       # custom threshold
-```
 
 ### rp list
 

@@ -96,7 +96,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 		og := ownerByRepo[entry.Repo]
 		var label string
-		if og.IsFlat {
+		if entry.Category == "" {
 			label = repoName
 		} else {
 			label = entry.Category + "/" + repoName

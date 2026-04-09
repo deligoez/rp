@@ -53,11 +53,11 @@ type bootstrapSummaryJSON struct {
 //   - archive entries: "archive/{repo_name}"
 //   - flat owners:     "{repo_name}"
 //   - categorized:     "{category}/{repo_name}"
+// repoLabel returns the display label for a repo entry:
+//   - flat owners:     "{repo_name}"
+//   - categorized:     "{category}/{repo_name}"
 func repoLabel(e manifest.RepoEntry) string {
-	if e.IsArchive {
-		return "archive/" + repoName(e.Repo)
-	}
-	if e.IsFlat {
+	if e.Category == "" {
 		return repoName(e.Repo)
 	}
 	return e.Category + "/" + repoName(e.Repo)

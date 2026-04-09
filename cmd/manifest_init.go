@@ -333,59 +333,51 @@ func generateYAML(scanRoot string, layouts []ownerLayout) ([]byte, error) {
 
 	for _, layout := range layouts {
 		ownerKey := scalarNode(layout.ownerDirName)
-		ownerVal := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 
 		if layout.isFlat {
-			addBoolPair(ownerVal, "flat", true)
-		}
-
-		// Group repos by category (preserving insertion order).
-		type catEntry struct {
-			name  string
-			repos []scannedRepo
-		}
-		var catOrder []string
-		catMap := make(map[string][]scannedRepo)
-
-		for _, r := range layout.repos {
-			cat := r.category
-			if cat == "" {
-				cat = "_flat_"
-			}
-			if _, ok := catMap[cat]; !ok {
-				catOrder = append(catOrder, cat)
-			}
-			catMap[cat] = append(catMap[cat], r)
-		}
-
-		for _, cat := range catOrder {
-			repos := catMap[cat]
-
-			var catName string
-			if cat == "_flat_" {
-				// Flat repos are listed directly under the owner node without a category key.
-				// According to the manifest spec, flat owners just have repo entries inline;
-				// but the schema requires at least one category. We use "repos" as a fallback
-				// category name for flat mode (the layout converter already handled this).
-				// In practice _flat_ only appears when isFlat=true; produce a bare sequence.
-				catName = "repos"
-			} else {
-				catName = cat
-			}
-
-			catKey := scalarNode(catName)
-			catVal := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-
-			for _, r := range repos {
+			// Flat owner: emit as a sequence of repo entries directly.
+			ownerVal := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+			for _, r := range layout.repos {
 				repoEntry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 				addStringPair(repoEntry, "repo", r.ghRepo)
-				catVal.Content = append(catVal.Content, repoEntry)
+				ownerVal.Content = append(ownerVal.Content, repoEntry)
+			}
+			ownersVal.Content = append(ownersVal.Content, ownerKey, ownerVal)
+		} else {
+			// Categorized owner: emit as a mapping with category keys.
+			ownerVal := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+
+			// Group repos by category (preserving insertion order).
+			var catOrder []string
+			catMap := make(map[string][]scannedRepo)
+
+			for _, r := range layout.repos {
+				cat := r.category
+				if cat == "" {
+					cat = "repos"
+				}
+				if _, ok := catMap[cat]; !ok {
+					catOrder = append(catOrder, cat)
+				}
+				catMap[cat] = append(catMap[cat], r)
 			}
 
-			ownerVal.Content = append(ownerVal.Content, catKey, catVal)
-		}
+			for _, cat := range catOrder {
+				repos := catMap[cat]
+				catKey := scalarNode(cat)
+				catVal := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 
-		ownersVal.Content = append(ownersVal.Content, ownerKey, ownerVal)
+				for _, r := range repos {
+					repoEntry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+					addStringPair(repoEntry, "repo", r.ghRepo)
+					catVal.Content = append(catVal.Content, repoEntry)
+				}
+
+				ownerVal.Content = append(ownerVal.Content, catKey, catVal)
+			}
+
+			ownersVal.Content = append(ownersVal.Content, ownerKey, ownerVal)
+		}
 	}
 
 	return yaml.Marshal(root)
@@ -402,17 +394,6 @@ func addStringPair(m *yaml.Node, key, val string) {
 }
 
 // addBoolPair appends a key/value bool pair to a mapping node.
-func addBoolPair(m *yaml.Node, key string, val bool) {
-	valStr := "false"
-	if val {
-		valStr = "true"
-	}
-	m.Content = append(m.Content, scalarNode(key), &yaml.Node{
-		Kind:  yaml.ScalarNode,
-		Tag:   "!!bool",
-		Value: valStr,
-	})
-}
 
 // ---------------------------------------------------------------------------
 // Main command handler

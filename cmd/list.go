@@ -42,7 +42,6 @@ type listOwnerBlock struct {
 	name       string
 	isFlat     bool
 	categories []listCategoryBlock
-	archive    *listCategoryBlock // nil if none
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -70,7 +69,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	for _, owner := range m.Owners() {
 		catOrder := []string{}
 		catMap := map[string][]listRepoLine{}
-		var archiveLines []listRepoLine
 
 		for _, entry := range owner.Repos {
 			// Skip repos excluded by filter.
@@ -92,19 +90,11 @@ func runList(cmd *cobra.Command, args []string) error {
 				totalMissing++
 			}
 
-			if entry.IsArchive {
-				archiveLines = append(archiveLines, rl)
-			} else {
-				cat := entry.Category
-				if owner.IsFlat {
-					// Flat owners: all non-archive repos share the empty-string bucket
-					cat = ""
-				}
-				if _, seen := catMap[cat]; !seen {
-					catOrder = append(catOrder, cat)
-				}
-				catMap[cat] = append(catMap[cat], rl)
+			cat := entry.Category
+			if _, seen := catMap[cat]; !seen {
+				catOrder = append(catOrder, cat)
 			}
+			catMap[cat] = append(catMap[cat], rl)
 		}
 
 		var catBlocks []listCategoryBlock
@@ -115,13 +105,8 @@ func runList(cmd *cobra.Command, args []string) error {
 			})
 		}
 
-		var archBlock *listCategoryBlock
-		if len(archiveLines) > 0 {
-			archBlock = &listCategoryBlock{name: "archive", repos: archiveLines}
-		}
-
 		// Skip empty owner blocks (all repos filtered out).
-		if len(catBlocks) == 0 && archBlock == nil {
+		if len(catBlocks) == 0 {
 			continue
 		}
 
@@ -129,7 +114,6 @@ func runList(cmd *cobra.Command, args []string) error {
 			name:       owner.Name,
 			isFlat:     owner.IsFlat,
 			categories: catBlocks,
-			archive:    archBlock,
 		})
 	}
 
@@ -141,8 +125,6 @@ func runList(cmd *cobra.Command, args []string) error {
 			Category  string `json:"category"`
 			LocalPath string `json:"local_path"`
 			Exists    bool   `json:"exists"`
-			IsArchive bool   `json:"is_archive"`
-			IsFlat    bool   `json:"is_flat"`
 		}
 
 		jsonRepos := make([]jsonRepo, 0, len(filteredRepos))
@@ -157,8 +139,6 @@ func runList(cmd *cobra.Command, args []string) error {
 				Category:  entry.Category,
 				LocalPath: entry.LocalPath,
 				Exists:    exists,
-				IsArchive: entry.IsArchive,
-				IsFlat:    entry.IsFlat,
 			})
 		}
 
@@ -195,18 +175,6 @@ func runList(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
-		if ob.archive != nil {
-			for _, rl := range ob.archive.repos {
-				if !listMissing || !rl.exists {
-					if len(rl.name) > nameWidth {
-						nameWidth = len(rl.name)
-					}
-					if len(rl.path) > pathWidth {
-						pathWidth = len(rl.path)
-					}
-				}
-			}
-		}
 	}
 
 	// Print output.
@@ -215,13 +183,8 @@ func runList(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		ownerHeader := ob.name
-		if ob.isFlat {
-			ownerHeader += " (flat)"
-		}
-		fmt.Println(ownerHeader)
+		fmt.Println(ob.name)
 
-		// Non-archive categories.
 		for _, cb := range ob.categories {
 			if listMissing && !listCategoryHasMissing(cb) {
 				continue
@@ -239,19 +202,6 @@ func runList(cmd *cobra.Command, args []string) error {
 				// Categorized owner: category sub-header at 2-space indent.
 				fmt.Printf("  %s\n", cb.name)
 				for _, rl := range cb.repos {
-					if listMissing && rl.exists {
-						continue
-					}
-					fmt.Println(listFormatRepoLine(rl, 4, nameWidth, pathWidth))
-				}
-			}
-		}
-
-		// Archive sub-group (always at 2-space indent with its own "archive" header).
-		if ob.archive != nil {
-			if !listMissing || listCategoryHasMissing(*ob.archive) {
-				fmt.Println("  archive")
-				for _, rl := range ob.archive.repos {
 					if listMissing && rl.exists {
 						continue
 					}
@@ -324,9 +274,6 @@ func listOwnerHasMissing(ob listOwnerBlock) bool {
 		if listCategoryHasMissing(cb) {
 			return true
 		}
-	}
-	if ob.archive != nil && listCategoryHasMissing(*ob.archive) {
-		return true
 	}
 	return false
 }

@@ -26,14 +26,9 @@ owners:
     projects:
       - repo: deligoez/tp
       - repo: deligoez/rp
-    archive:
-      - repo: deligoez/roast
   phonyland:
-    flat: true
-    cloud:
-      - repo: phonyland/cloud
-    archive:
-      - repo: phonyland/framework
+    - repo: phonyland/cloud
+    - repo: phonyland/framework
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -50,7 +45,7 @@ owners:
 		t.Fatalf("expected 2 owners, got %d", len(owners))
 	}
 
-	// deligoez owner
+	// deligoez owner (categorized)
 	deligoez := owners[0]
 	if deligoez.Name != "deligoez" {
 		t.Errorf("owners[0].Name = %q, want %q", deligoez.Name, "deligoez")
@@ -58,11 +53,11 @@ owners:
 	if deligoez.IsFlat {
 		t.Error("deligoez should not be flat")
 	}
-	if len(deligoez.Repos) != 3 {
-		t.Fatalf("deligoez: expected 3 repos, got %d", len(deligoez.Repos))
+	if len(deligoez.Repos) != 2 {
+		t.Fatalf("deligoez: expected 2 repos, got %d", len(deligoez.Repos))
 	}
 
-	// phonyland owner
+	// phonyland owner (flat)
 	phonyland := owners[1]
 	if phonyland.Name != "phonyland" {
 		t.Errorf("owners[1].Name = %q, want %q", phonyland.Name, "phonyland")
@@ -85,18 +80,10 @@ owners:
 	if tp.Category != "projects" {
 		t.Errorf("tp.Category = %q, want %q", tp.Category, "projects")
 	}
-	if tp.IsArchive {
-		t.Error("tp should not be archive")
-	}
-
-	roast := deligoez.Repos[2]
-	if !roast.IsArchive {
-		t.Error("roast should be archive")
-	}
 
 	cloud := phonyland.Repos[0]
-	if !cloud.IsFlat {
-		t.Error("cloud should be flat")
+	if cloud.Category != "" {
+		t.Errorf("cloud.Category = %q, want empty (flat)", cloud.Category)
 	}
 }
 
@@ -135,9 +122,7 @@ func TestFlatPath(t *testing.T) {
 base_dir: ` + baseDir + `
 owners:
   phonyland:
-    flat: true
-    cloud:
-      - repo: phonyland/cloud
+    - repo: phonyland/cloud
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -155,7 +140,7 @@ owners:
 	if !strings.HasSuffix(localPath, suffix) {
 		t.Errorf("LocalPath %q should end with %q", localPath, suffix)
 	}
-	// Must NOT contain the category segment between owner and repo name.
+	// Must NOT contain a category segment between owner and repo name.
 	notWanted := filepath.Join("phonyland", "cloud", "cloud")
 	if strings.HasSuffix(localPath, notWanted) {
 		t.Errorf("flat path %q must not contain category segment", localPath)
@@ -163,75 +148,8 @@ owners:
 }
 
 // Test 4: Archive path (categorized) — deligoez owner, archive, roast → ends with /deligoez/archive/roast
-func TestArchivePathCategorized(t *testing.T) {
-	baseDir := t.TempDir()
-	content := `
-base_dir: ` + baseDir + `
-owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
-    archive:
-      - repo: deligoez/roast
-`
-	path := writeManifest(t, content)
-	m, err := Load(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var archiveRepo *RepoEntry
-	for i, r := range m.Repos() {
-		if r.IsArchive {
-			archiveRepo = &m.Repos()[i]
-			break
-		}
-	}
-	if archiveRepo == nil {
-		t.Fatal("expected an archive repo")
-	}
-
-	suffix := filepath.Join("deligoez", "archive", "roast")
-	if !strings.HasSuffix(archiveRepo.LocalPath, suffix) {
-		t.Errorf("LocalPath %q should end with %q", archiveRepo.LocalPath, suffix)
-	}
-}
 
 // Test 5: Archive path (flat) — phonyland (flat), archive, framework → ends with /phonyland/archive/framework
-func TestArchivePathFlat(t *testing.T) {
-	baseDir := t.TempDir()
-	content := `
-base_dir: ` + baseDir + `
-owners:
-  phonyland:
-    flat: true
-    cloud:
-      - repo: phonyland/cloud
-    archive:
-      - repo: phonyland/framework
-`
-	path := writeManifest(t, content)
-	m, err := Load(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var archiveRepo *RepoEntry
-	for i, r := range m.Repos() {
-		if r.IsArchive {
-			archiveRepo = &m.Repos()[i]
-			break
-		}
-	}
-	if archiveRepo == nil {
-		t.Fatal("expected an archive repo")
-	}
-
-	suffix := filepath.Join("phonyland", "archive", "framework")
-	if !strings.HasSuffix(archiveRepo.LocalPath, suffix) {
-		t.Errorf("LocalPath %q should end with %q", archiveRepo.LocalPath, suffix)
-	}
-}
 
 // Test 6: Tilde expansion — base_dir: ~/Developer → expands to real home dir
 func TestTildeExpansion(t *testing.T) {
@@ -327,56 +245,8 @@ owners: {}
 	}
 }
 
-// Test 11: Reserved category name "flat" → error
-func TestReservedCategoryNameFlat(t *testing.T) {
-	baseDir := t.TempDir()
-	content := `
-base_dir: ` + baseDir + `
-owners:
-  deligoez:
-    flat:
-      - repo: deligoez/tp
-`
-	path := writeManifest(t, content)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for reserved category name 'flat', got nil")
-	}
-}
 
-// Test 12: Archive entries have IsArchive — archive repos → IsArchive: true
-func TestArchiveEntriesHaveIsArchive(t *testing.T) {
-	baseDir := t.TempDir()
-	content := `
-base_dir: ` + baseDir + `
-owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
-    archive:
-      - repo: deligoez/roast
-      - repo: deligoez/old-project
-`
-	path := writeManifest(t, content)
-	m, err := Load(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	for _, r := range m.Repos() {
-		if r.Repo == "deligoez/roast" || r.Repo == "deligoez/old-project" {
-			if !r.IsArchive {
-				t.Errorf("repo %q: expected IsArchive=true", r.Repo)
-			}
-		}
-		if r.Repo == "deligoez/tp" {
-			if r.IsArchive {
-				t.Errorf("repo %q: expected IsArchive=false", r.Repo)
-			}
-		}
-	}
-}
-
+// Test 13: Repo with deps — deps: ["npm install"] → Deps: ["npm install"]
 // Test 13: Repo with deps — deps: ["npm install"] → Deps: ["npm install"]
 func TestRepoWithDeps(t *testing.T) {
 	baseDir := t.TempDir()
@@ -526,22 +396,6 @@ owners:
 }
 
 // Test 18: flat with non-boolean — flat: 42 → error
-func TestFlatNonBoolean(t *testing.T) {
-	baseDir := t.TempDir()
-	content := `
-base_dir: ` + baseDir + `
-owners:
-  deligoez:
-    flat: 42
-    projects:
-      - repo: deligoez/tp
-`
-	path := writeManifest(t, content)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for non-boolean flat value, got nil")
-	}
-}
 
 // Test 19: Empty string in deps — deps: [""] → error
 func TestEmptyStringInDeps(t *testing.T) {
@@ -589,40 +443,8 @@ func TestQA_NoOwners(t *testing.T) {
 }
 
 // QA-R3: flat: 42 (non-boolean) should fail with tag check
-func TestQA_FlatNonBoolInt(t *testing.T) {
-	content := `
-base_dir: /tmp/test
-owners:
-  owner1:
-    flat: 42
-    repos:
-      - repo: test/repo
-`
-	path := writeManifest(t, content)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for flat: 42")
-	}
-	if !strings.Contains(err.Error(), "boolean") {
-		t.Errorf("error should mention boolean: %v", err)
-	}
-}
 
 // QA-R4: flat as a sequence (reserved key collision)
-func TestQA_FlatAsSequence(t *testing.T) {
-	content := `
-base_dir: /tmp/test
-owners:
-  owner1:
-    flat:
-      - repo: test/repo
-`
-	path := writeManifest(t, content)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for flat as sequence")
-	}
-}
 
 // QA-R5: Empty category list should fail
 func TestQA_EmptyCategoryList(t *testing.T) {
@@ -666,5 +488,103 @@ owners:
 	}
 	if r.CloneURL != "git@github.com:spf13/cobra.git" {
 		t.Errorf("clone URL should use github owner: %s", r.CloneURL)
+	}
+}
+
+func TestFlatOwnerAsSequence(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+owners:
+  myowner:
+    - repo: myowner/repo1
+    - repo: myowner/repo2
+`
+	path := writeManifest(t, content)
+	m, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	owners := m.Owners()
+	if len(owners) != 1 {
+		t.Fatalf("expected 1 owner, got %d", len(owners))
+	}
+	if !owners[0].IsFlat {
+		t.Error("sequence owner should be flat")
+	}
+	for _, r := range owners[0].Repos {
+		if r.Category != "" {
+			t.Errorf("flat repo %q should have empty category, got %q", r.Repo, r.Category)
+		}
+	}
+}
+
+func TestCategorizedOwnerAsMapping(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+owners:
+  myowner:
+    tools:
+      - repo: myowner/tool1
+    libs:
+      - repo: myowner/lib1
+`
+	path := writeManifest(t, content)
+	m, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	owners := m.Owners()
+	if owners[0].IsFlat {
+		t.Error("mapping owner should not be flat")
+	}
+	if owners[0].Repos[0].Category != "tools" {
+		t.Errorf("expected category 'tools', got %q", owners[0].Repos[0].Category)
+	}
+}
+
+func TestOwnerValueScalarError(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+owners:
+  myowner: invalid
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for scalar owner value, got nil")
+	}
+}
+
+func TestMixedOwnerTypes(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+owners:
+  catowner:
+    projects:
+      - repo: catowner/proj1
+  flatowner:
+    - repo: flatowner/repo1
+`
+	path := writeManifest(t, content)
+	m, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	owners := m.Owners()
+	if len(owners) != 2 {
+		t.Fatalf("expected 2 owners, got %d", len(owners))
+	}
+	if owners[0].IsFlat {
+		t.Error("catowner should not be flat")
+	}
+	if !owners[1].IsFlat {
+		t.Error("flatowner should be flat")
 	}
 }
