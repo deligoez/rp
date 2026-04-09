@@ -196,6 +196,20 @@ rp diff --since 24h       # last 24 hours
 rp diff --json            # structured output
 ```
 
+### rp discover
+
+Find GitHub repos not tracked in your manifest. Requires [`gh` CLI](https://cli.github.com).
+
+```bash
+rp discover                   # scan personal + all org repos
+rp discover --forks           # include forked repos
+rp discover --archived        # include archived repos
+rp discover --filter acme/    # only show untracked acme repos
+rp discover --json            # structured output
+```
+
+Scans the authenticated user's personal account and all member orgs. Exit 0 = all repos tracked. Exit 1 = untracked repos found.
+
 ## Global Flags
 
 | Flag | Short | Default | Description |

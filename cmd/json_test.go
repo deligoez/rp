@@ -2015,3 +2015,217 @@ owners:
 		t.Errorf("summary should contain 'already existed': %s", output)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Discover Tests
+// ---------------------------------------------------------------------------
+
+// ghAvailable returns true if gh CLI is installed and authenticated.
+func ghAvailable() bool {
+	cmd := exec.Command("gh", "auth", "status")
+	return cmd.Run() == nil
+}
+
+// TestDiscoverGhNotFound verifies exit 2 + hint when gh is not in PATH.
+func TestDiscoverGhNotFound(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "owner", "repo")
+	initGitRepo(t, repoDir)
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  owner:
+    - repo: owner/repo
+`, base))
+
+	// Run with PATH set to just /usr/bin (no gh).
+	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
+	cmd.Env = append(os.Environ(), "PATH=/usr/bin")
+	out, _ := cmd.Output()
+
+	if cmd.ProcessState.ExitCode() != 2 {
+		t.Fatalf("expected exit 2, got %d", cmd.ProcessState.ExitCode())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	}
+
+	assertString(t, result, "command", "discover")
+	assertFloat(t, result, "exit_code", 2)
+
+	errMsg, ok := result["error"].(string)
+	if !ok || !strings.Contains(errMsg, "gh CLI not found") {
+		t.Fatalf("expected error containing 'gh CLI not found', got %q", errMsg)
+	}
+
+	hint, ok := result["hint"].(string)
+	if !ok || hint == "" {
+		t.Fatalf("expected non-empty hint, got %q", hint)
+	}
+}
+
+// TestDiscoverJSONSchema verifies JSON structure with real gh.
+func TestDiscoverJSONSchema(t *testing.T) {
+	if !ghAvailable() {
+		t.Skip("gh CLI not available")
+	}
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "nobody", "nonexistent")
+	initGitRepo(t, repoDir)
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  nobody:
+    - repo: nobody/nonexistent
+`, base))
+
+	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Run()
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+	}
+
+	assertString(t, result, "command", "discover")
+	assertKey(t, result, "exit_code")
+
+	// Verify exit_code is 0 or 1.
+	exitCode := result["exit_code"].(float64)
+	if exitCode != 0 && exitCode != 1 {
+		t.Fatalf("expected exit_code 0 or 1, got %v", exitCode)
+	}
+
+	// Verify summary has all 4 keys with numeric values.
+	summary, ok := result["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary to be object, got %T", result["summary"])
+	}
+	for _, key := range []string{"untracked", "owners_scanned", "total_remote", "total_manifest"} {
+		v, exists := summary[key]
+		if !exists {
+			t.Fatalf("summary missing key %q", key)
+		}
+		if _, ok := v.(float64); !ok {
+			t.Fatalf("summary[%q] expected number, got %T", key, v)
+		}
+	}
+
+	// Verify repos is an array.
+	repos := assertKey(t, result, "repos")
+	if _, ok := repos.([]interface{}); !ok {
+		t.Fatalf("expected repos to be array, got %T", repos)
+	}
+}
+
+// TestDiscoverCompact verifies --compact omits repos key.
+func TestDiscoverCompact(t *testing.T) {
+	if !ghAvailable() {
+		t.Skip("gh CLI not available")
+	}
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "nobody", "nonexistent")
+	initGitRepo(t, repoDir)
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  nobody:
+    - repo: nobody/nonexistent
+`, base))
+
+	cmd := exec.Command(binary, "--json", "--compact", "--manifest", manifestPath, "discover")
+	out, _ := cmd.Output()
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	}
+
+	assertString(t, result, "command", "discover")
+	assertNoKey(t, result, "repos")
+	assertKey(t, result, "summary")
+}
+
+// TestDiscoverFilterNonexistent verifies --filter with no matches returns exit 0.
+func TestDiscoverFilterNonexistent(t *testing.T) {
+	if !ghAvailable() {
+		t.Skip("gh CLI not available")
+	}
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "nobody", "nonexistent")
+	initGitRepo(t, repoDir)
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  nobody:
+    - repo: nobody/nonexistent
+`, base))
+
+	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "--filter", "nonexistent/", "discover")
+	out, _ := cmd.Output()
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	}
+
+	assertString(t, result, "command", "discover")
+	assertFloat(t, result, "exit_code", 0)
+
+	summary := result["summary"].(map[string]interface{})
+	if summary["untracked"].(float64) != 0 {
+		t.Fatalf("expected 0 untracked with nonexistent filter, got %v", summary["untracked"])
+	}
+}
+
+// TestDiscoverExitCode1 verifies exit 1 when untracked repos exist.
+func TestDiscoverExitCode1(t *testing.T) {
+	if !ghAvailable() {
+		t.Skip("gh CLI not available")
+	}
+	binary := binaryForTest(t)
+	base := t.TempDir()
+	repoDir := filepath.Join(base, "nobody", "nonexistent")
+	initGitRepo(t, repoDir)
+
+	// Manifest with a single dummy repo — all real GitHub repos will be untracked.
+	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owners:
+  nobody:
+    - repo: nobody/nonexistent
+`, base))
+
+	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Run()
+
+	exitCode := cmd.ProcessState.ExitCode()
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout.String())
+	}
+
+	summary := result["summary"].(map[string]interface{})
+	untracked := summary["untracked"].(float64)
+
+	if untracked == 0 {
+		t.Skip("user has zero GitHub repos — cannot test exit code 1")
+	}
+
+	if exitCode != 1 {
+		t.Fatalf("expected exit 1 (untracked repos found), got %d", exitCode)
+	}
+	assertFloat(t, result, "exit_code", 1)
+}

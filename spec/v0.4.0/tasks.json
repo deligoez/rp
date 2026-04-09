@@ -1,0 +1,72 @@
+[
+  {
+    "id": "gh-helpers",
+    "title": "Add gh CLI helper functions",
+    "description": "ghAuthCheck, ghCurrentUser, ghListOrgs, ghListRepos and ghRepo struct",
+    "status": "open",
+    "depends_on": [],
+    "estimate_minutes": 12,
+    "acceptance": "- ghAuthCheck returns nil on success, HintError with install/auth hints on failure\n- ghCurrentUser returns login, ghListOrgs returns paginated org logins\n- ghListRepos returns []ghRepo with nameWithOwner/isFork/isArchived fields",
+    "source_lines": "113-148,161-197"
+  },
+  {
+    "id": "filter-logic",
+    "title": "Implement filterUntracked core logic",
+    "description": "Pure filtering function and custom discover filter matching",
+    "status": "open",
+    "depends_on": [],
+    "estimate_minutes": 10,
+    "acceptance": "- filterUntracked deduplicates by case-insensitive nameWithOwner, applies fork/archived AND filters, subtracts manifest repos\n- matchesDiscoverFilter matches owner/ prefix and owner/name exactly, both case-insensitive",
+    "source_lines": "198-204"
+  },
+  {
+    "id": "cmd-discover",
+    "title": "Wire discover cobra command",
+    "description": "Command handler with flags, human output, progress, exit codes",
+    "status": "open",
+    "depends_on": ["gh-helpers", "filter-logic"],
+    "estimate_minutes": 12,
+    "acceptance": "- Cobra command with --forks, --archived boolean flags registered on root\n- Human output grouped by owner with (personal) label and progress on stderr\n- Exit 0 no untracked, exit 1 found, exit 2 on error",
+    "source_lines": "1-65,99-112,149-160,206-209"
+  },
+  {
+    "id": "cmd-discover-json",
+    "title": "Add JSON output to discover",
+    "description": "JSON and compact mode output paths",
+    "status": "open",
+    "depends_on": ["cmd-discover"],
+    "estimate_minutes": 8,
+    "acceptance": "- JSON output via SuccessResult with summary (untracked, owners_scanned, total_remote, total_manifest) and repos array\n- --compact omits repos array; --filter narrows output via matchesDiscoverFilter",
+    "source_lines": "65-98"
+  },
+  {
+    "id": "unit-tests",
+    "title": "Add filterUntracked unit tests",
+    "description": "10 unit tests from spec section 3.1",
+    "status": "open",
+    "depends_on": ["filter-logic"],
+    "estimate_minutes": 10,
+    "acceptance": "- 10 tests: subtraction, all-tracked, fork exclude/include, archived exclude/include, case-insensitive, dedup, fork+archived AND, empty manifest\n- All pass via go test ./cmd/ -run TestFilterUntracked",
+    "source_lines": "213-229"
+  },
+  {
+    "id": "integration-tests",
+    "title": "Add discover integration tests",
+    "description": "5 subprocess tests from spec section 3.2",
+    "status": "open",
+    "depends_on": ["cmd-discover-json"],
+    "estimate_minutes": 12,
+    "acceptance": "- 5 tests: gh-not-found exit 2 with hint, JSON schema structure, compact no repos key, filter nonexistent exit 0, exit code 1 with dummy manifest\n- gh-dependent tests skip when gh unavailable",
+    "source_lines": "230-240"
+  },
+  {
+    "id": "update-docs",
+    "title": "Update CLAUDE.md for discover",
+    "description": "Add discover to Commands, Flags, Behavior, Structure sections",
+    "status": "open",
+    "depends_on": ["cmd-discover-json"],
+    "estimate_minutes": 5,
+    "acceptance": "- CLAUDE.md lists discover in Commands, Per-Command Flags, Command Behavior sections\n- Project Structure includes discover.go and discover_test.go",
+    "source_lines": "7-9"
+  }
+]

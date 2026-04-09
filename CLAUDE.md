@@ -42,6 +42,7 @@ rp manifest init          # Scan dirs, generate manifest
 rp up                     # Bootstrap + sync + deps in one call
 rp check                  # Boolean exit code (0=ok, 1=attention, 2=error)
 rp diff                   # Show latest commit per repo
+rp discover               # Find GitHub repos not in manifest (requires gh)
 ```
 
 ### Global Flags
@@ -55,7 +56,6 @@ rp diff                   # Show latest commit per repo
 ```
 
 ### Per-Command Flags
-### Per-Command Flags
 ```
 bootstrap --dry-run
 sync --dry-run
@@ -66,10 +66,21 @@ manifest init --dir <path> --output <path> --dry-run
 up --dry-run --no-deps
 check                             # no flags except --filter
 diff --since <Nd|Nh>
+discover --forks --archived
 ```
-## Project Structure
 
-```
+### Command Behavior
+
+- **bootstrap**: Clone missing repos via SSH (`git@github.com:{repo}.git`). Skip already-cloned. `--dry-run` previews.
+- **sync**: Per-repo evaluation order: not cloned → skip, not git → error, dirty → skip, unpushed → skip, clean → `git pull --ff-only`.
+- **status**: Reports per-repo: branch, dirty file count, ahead/behind counts, upstream presence. Flags filter output.
+- **deps**: Runs `deps:` commands via `sh -c` in each repo's directory. Skips repos without deps. Positional arg overrides `--filter`.
+- **list**: Shows all repos grouped by owner/category. `--missing` shows only uncloned.
+- **manifest init**: Scans a directory tree, discovers git repos with GitHub remotes, infers flat (depth-1) vs categorized (depth-2) layout, generates YAML.
+- **up**: Runs bootstrap → sync → deps in sequence. `--no-deps` skips the deps phase. JSON output wraps all three as sub-results.
+- **diff**: Shows latest commit (sha, message, date, days_ago) per repo. `--since` filters by recency.
+- **discover**: Lists GitHub repos not in manifest. Requires `gh` CLI. Scans personal account + all member orgs. `--forks` includes forks, `--archived` includes archived. Exit 0 = all tracked, exit 1 = untracked found.
+
 ## Project Structure
 
 ```
@@ -84,6 +95,8 @@ cmd/                      Cobra commands
   up.go                   Composite bootstrap+sync+deps
   check.go                Boolean exit code, zero output
   diff.go                 Latest commit per repo, --since filter
+  discover.go             Find untracked GitHub repos (requires gh CLI)
+  discover_test.go        Unit tests (filterUntracked, matchesDiscoverFilter)
   json_test.go            JSON integration tests (subprocess)
 internal/
   manifest/
@@ -93,13 +106,13 @@ internal/
     filter_test.go        Filter tests
   git/
     git.go                Clone, Pull, Status, LastCommitDate, IsRepo
-    git_test.go           17 unit tests (13 spec + 4 QA regression)
+    git_test.go           Unit tests (use real temp repos)
   deps/
     deps.go               RunDeps via sh -c
-    deps_test.go          7 unit tests
+    deps_test.go          Unit tests
   output/
     output.go             SuccessResult, ErrorResult, UpResult, HintError, PrintAndExit
-    output_test.go        8 unit tests
+    output_test.go        Unit tests
   ui/
     ui.go                 Lipgloss symbols (OK/!!/XX), Plural, PadRight
   worker/
@@ -115,6 +128,7 @@ main.go                   Entry point
 - Specs live in `spec/v{version}/` folders, prefixed with the release version they target
 - Each folder contains `spec.md` and `tasks.json` with matching names
 - Suffix variants (e.g. `v0.1.0-ax`) are allowed for additive specs within a release
+
 ## Conventions
 
 - Exit codes: 0=success, 1=attention (dirty/missing/behind), 2=hard error
@@ -127,8 +141,9 @@ main.go                   Entry point
 - Manifest uses yaml.Node for key order preservation
 - `os.Exit()` only in human mode; JSON mode uses `output.PrintAndExit`
 - Errors wrapped with `output.HintError` for actionable hints
+- Config precedence: flag > env var > default value
+- Clone URL: `git@github.com:{repo}.git` (SSH)
 
-## Manifest Format
 ## Manifest Format
 
 Location: `~/.config/rp/manifest.yaml`
@@ -154,6 +169,21 @@ owners:
 - Categorized (mapping): `{base_dir}/{owner}/{category}/{repo_name}/`
 - Flat (sequence): `{base_dir}/{owner}/{repo_name}/`
 - Owner type is inferred from YAML structure: mapping = categorized, sequence = flat
+
+### Manifest Validation Rules
+1. `base_dir` must be present and non-empty
+2. `repo` must match `{owner}/{name}` (alphanumeric, hyphens, underscores, dots)
+3. No duplicate repos across entire manifest
+4. Owner and category names must be valid directory names (no `/`, `..`, null bytes)
+5. At least one owner with at least one repo
+6. Categories must contain a non-empty repo list
+7. `deps` entries must be non-empty strings
+
+### Key Data Structures
+- **RepoEntry**: Repo, Owner, Category (empty for flat), LocalPath, CloneURL, Deps
+- **OwnerGroup**: Name, IsFlat (derived from YAML node type), Repos
+- **Manifest**: BaseDir, owners (private, accessed via Repos()/Owners())
+
 ## JSON Output
 
 Every command supports `--json`. Two result types:
@@ -183,13 +213,13 @@ Every command supports `--json`. Two result types:
 | `NO_COLOR` | Disable color output (per no-color.org) |
 
 ## Testing
-## Testing
 
-Tests across 5 test files:
+Tests across 6 test files:
 - `internal/manifest`: parsing/validation + filter tests
-- `internal/git`: 17 git operation tests (use temp repos)
-- `internal/deps`: 7 command execution tests
-- `internal/output`: 8 JSON serialization tests
-- `cmd`: end-to-end integration tests (subprocess: JSON output, check, diff, deps dry-run, sync errors, hints, QA regressions)
+- `internal/git`: git operation tests (use temp repos)
+- `internal/deps`: command execution tests
+- `internal/output`: JSON serialization tests
+- `cmd/json_test.go`: end-to-end integration tests (subprocess: JSON output, check, diff, deps dry-run, sync errors, hints, discover, QA regressions)
+- `cmd/discover_test.go`: unit tests for filterUntracked and matchesDiscoverFilter
 
 Git tests create real temp repos with `git init`, commits, and bare repos for clone/pull testing. Integration tests build the binary and run it as a subprocess.
