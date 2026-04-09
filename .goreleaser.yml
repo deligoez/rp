@@ -21,7 +21,7 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/deligoez/rp/cmd.Version={{.Version}}
+      - -X github.com/deligoez/rp/cmd.version={{.Version}}
 
 archives:
   - name_template: >-

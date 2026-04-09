@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time via ldflags, or auto-detected from module info.
-var Version = version()
+// version is set at build time via ldflags, or auto-detected from module info.
+var version = "dev"
 
 // Exported package-level variables so subcommands can read the resolved values.
 var (
@@ -27,7 +27,7 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:           "rp",
-	Version:       Version,
+	Version:       "dev", // overridden in init()
 	Short:         "Repo manager CLI — organize, sync, and bootstrap your Developer workspace",
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -147,10 +147,11 @@ func Execute() {
 	}
 }
 
-// version returns the module version from build info, falling back to "dev".
-func version() string {
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		return info.Main.Version
+func init() {
+	if version == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
 	}
-	return "dev"
+	rootCmd.Version = version
 }
