@@ -2045,9 +2045,9 @@ owners:
     - repo: owner/repo
 `, base))
 
-	// Run with PATH set to just /usr/bin (no gh).
+	// Run with PATH set to a nonexistent dir so gh cannot be found.
 	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
-	cmd.Env = append(os.Environ(), "PATH=/usr/bin")
+	cmd.Env = append(os.Environ(), "PATH=/nonexistent")
 	out, _ := cmd.Output()
 
 	if cmd.ProcessState.ExitCode() != 2 {
