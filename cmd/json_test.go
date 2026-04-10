@@ -208,10 +208,9 @@ func TestJSONStatusBasic(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
+owner:
+  projects:
+    - repo: owner/myrepo
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "status")
@@ -242,10 +241,9 @@ func TestJSONStatusNotCloned(t *testing.T) {
 	// Don't create any directory; the repo is "not cloned".
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  ghost:
-    projects:
-      - repo: ghost/missing
+ghost:
+  projects:
+    - repo: ghost/missing
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "status")
@@ -286,11 +284,10 @@ func TestJSONBootstrapActionField(t *testing.T) {
 	// One repo whose URL is fake → clone will fail → "failed".
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-      - repo: owner/nonexistent
+owner:
+  projects:
+    - repo: owner/existing
+    - repo: owner/nonexistent
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "bootstrap")
@@ -336,10 +333,9 @@ func TestJSONSyncSkippedDirty(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/dirty
+owner:
+  projects:
+    - repo: owner/dirty
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "sync")
@@ -375,12 +371,11 @@ func TestJSONDepsSkippedNotOnDisk(t *testing.T) {
 	// Repo is not on disk and has a dep defined.
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/missing
-        deps:
-          - echo hello
+owner:
+  projects:
+    - repo: owner/missing
+      deps:
+        - echo hello
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "deps")
@@ -438,10 +433,9 @@ func TestJSONCompactNoRepos(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
+owner:
+  projects:
+    - repo: owner/myrepo
 `, base))
 
 	// Pass --compact in addition to --json (already injected by runRPJSON).
@@ -475,11 +469,10 @@ func TestJSONBootstrapDryRun(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-      - repo: owner/missing
+owner:
+  projects:
+    - repo: owner/existing
+    - repo: owner/missing
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "bootstrap", "--dry-run")
@@ -558,11 +551,10 @@ func upManifest(t *testing.T) (manifestPath, base string) {
 
 	manifestPath = writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-      - repo: owner/missing
+owner:
+  projects:
+    - repo: owner/existing
+    - repo: owner/missing
 `, base))
 	return manifestPath, base
 }
@@ -612,13 +604,12 @@ func TestUpAllPhases(t *testing.T) {
 	// Include a repo with a dep so the deps phase has work to do.
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-        deps:
-          - echo hello
-      - repo: owner/missing
+owner:
+  projects:
+    - repo: owner/existing
+      deps:
+        - echo hello
+    - repo: owner/missing
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath)
@@ -677,15 +668,14 @@ func TestUpDryRunWithDeps(t *testing.T) {
 
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-        deps:
-          - echo hello
-      - repo: owner/missing
-        deps:
-          - echo world
+owner:
+  projects:
+    - repo: owner/existing
+      deps:
+        - echo hello
+    - repo: owner/missing
+      deps:
+        - echo world
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath, "--dry-run")
@@ -776,12 +766,11 @@ func TestUpJSONStructure(t *testing.T) {
 
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-        deps:
-          - echo hello
+owner:
+  projects:
+    - repo: owner/existing
+      deps:
+        - echo hello
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath)
@@ -807,10 +796,9 @@ func TestUpExitCodeFailure(t *testing.T) {
 	// Only a missing repo — bootstrap will fail to clone it.
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/willnotclone
+owner:
+  projects:
+    - repo: owner/willnotclone
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath)
@@ -853,12 +841,11 @@ func TestUpPhaseContinuation(t *testing.T) {
 
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/dirty
-        deps:
-          - echo hello
+owner:
+  projects:
+    - repo: owner/dirty
+      deps:
+        - echo hello
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath)
@@ -981,11 +968,10 @@ func TestFilterWithJSON(t *testing.T) {
 
 	manifest := writeManifest(t, dir, fmt.Sprintf(`
 base_dir: %s/repos
-owners:
-  alice:
-    - repo: alice/repo1
-  bob:
-    - repo: bob/repo2
+alice:
+  - repo: alice/repo1
+bob:
+  - repo: bob/repo2
 `, dir))
 
 	binary := filepath.Join(testBinaryDir, "rp")
@@ -1014,11 +1000,10 @@ func TestFilterDepsPositionalOverridesFilter(t *testing.T) {
 
 	manifest := writeManifest(t, dir, fmt.Sprintf(`
 base_dir: %s/repos
-owners:
-  me:
-    - repo: me/myrepo
-      deps:
-        - echo hello
+me:
+  - repo: me/myrepo
+    deps:
+      - echo hello
 `, dir))
 
 	binary := filepath.Join(testBinaryDir, "rp")
@@ -1066,13 +1051,12 @@ func TestDepsDryRunListsCommands(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
-        deps:
-          - echo hello
-          - echo world
+owner:
+  projects:
+    - repo: owner/myrepo
+      deps:
+        - echo hello
+        - echo world
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "deps", "--dry-run")
@@ -1116,12 +1100,11 @@ func TestDepsDryRunSkipsMissing(t *testing.T) {
 	// Repo is NOT created on disk.
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/missing
-        deps:
-          - echo hello
+owner:
+  projects:
+    - repo: owner/missing
+      deps:
+        - echo hello
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "deps", "--dry-run")
@@ -1154,12 +1137,11 @@ func TestUpDryRunIncludesDeps(t *testing.T) {
 
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/existing
-        deps:
-          - echo hello
+owner:
+  projects:
+    - repo: owner/existing
+      deps:
+        - echo hello
 `, base))
 
 	result := runUpJSON(t, binary, manifestPath, "--dry-run")
@@ -1197,10 +1179,9 @@ func TestSyncCleanErrorDetachedHead(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/detached
+owner:
+  projects:
+    - repo: owner/detached
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "sync")
@@ -1252,10 +1233,9 @@ func TestSyncCleanErrorEmptyRepo(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/empty
+owner:
+  projects:
+    - repo: owner/empty
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "sync")
@@ -1309,10 +1289,9 @@ func TestCheckAllClean(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/clean
+owner:
+  projects:
+    - repo: owner/clean
 `, base))
 
 	stdout, stderr, exitCode := runCheckCmd(binary, manifest)
@@ -1338,10 +1317,9 @@ func TestCheckDirtyRepo(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/dirty
+owner:
+  projects:
+    - repo: owner/dirty
 `, base))
 
 	stdout, stderr, exitCode := runCheckCmd(binary, manifest)
@@ -1365,10 +1343,9 @@ func TestCheckMissingRepo(t *testing.T) {
 	// Do NOT create the repo directory.
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/missing
+owner:
+  projects:
+    - repo: owner/missing
 `, base))
 
 	stdout, stderr, exitCode := runCheckCmd(binary, manifest)
@@ -1415,10 +1392,9 @@ func TestDiffBasic(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
+owner:
+  projects:
+    - repo: owner/myrepo
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "diff")
@@ -1469,10 +1445,9 @@ func TestDiffSinceFilter(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
+owner:
+  projects:
+    - repo: owner/myrepo
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "diff", "--since", "9999d")
@@ -1502,10 +1477,9 @@ func TestDiffInvalidSince(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
+owner:
+  projects:
+    - repo: owner/myrepo
 `, base))
 
 	// Use runRPJSON to capture the JSON error envelope.
@@ -1554,9 +1528,8 @@ func TestHintEmptyCategory(t *testing.T) {
 	// projects: [] is an empty category list — should trigger a validation hint.
 	manifest := writeManifest(t, dir, fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects: []
+owner:
+  projects: []
 `, dir))
 
 	result := runRPJSON(t, binary, manifest, "status")
@@ -1586,10 +1559,9 @@ func TestDepsDryRunPositionalNoDeps(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/nodeps
+owner:
+  projects:
+    - repo: owner/nodeps
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "deps", "--dry-run", "owner/nodeps")
@@ -1662,10 +1634,9 @@ func TestSyncCleanErrorGeneric(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/thatrepo
+owner:
+  projects:
+    - repo: owner/thatrepo
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "sync", "--filter", "owner/")
@@ -1711,13 +1682,12 @@ func TestCheckWithFilter(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  clean-owner:
-    projects:
-      - repo: clean-owner/clean
-  dirty-owner:
-    projects:
-      - repo: dirty-owner/dirty
+clean-owner:
+  projects:
+    - repo: clean-owner/clean
+dirty-owner:
+  projects:
+    - repo: dirty-owner/dirty
 `, base))
 
 	_, _, exitCode := runCheckCmd(binary, manifest, "--filter", "clean-owner/")
@@ -1743,10 +1713,9 @@ func TestCheckNoUpstreamClean(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/local
+owner:
+  projects:
+    - repo: owner/local
 `, base))
 
 	_, _, exitCode := runCheckCmd(binary, manifest)
@@ -1800,10 +1769,9 @@ func TestDiffSinceExcludes(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/oldrepo
+owner:
+  projects:
+    - repo: owner/oldrepo
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "diff", "--since", "1d")
@@ -1856,10 +1824,9 @@ func TestDiffEmptyRepoSkipped(t *testing.T) {
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/empty
+owner:
+  projects:
+    - repo: owner/empty
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "diff")
@@ -1902,12 +1869,11 @@ func TestHintEmptyDeps(t *testing.T) {
 	dir := t.TempDir()
 	manifest := writeManifest(t, dir, fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    projects:
-      - repo: owner/myrepo
-        deps:
-          - ""
+owner:
+  projects:
+    - repo: owner/myrepo
+      deps:
+        - ""
 `, dir))
 
 	result := runRPJSON(t, binary, manifest, "list")
@@ -1936,10 +1902,9 @@ func TestQA_DiffPipeInCommitMessage(t *testing.T) {
 
 	manifest := writeManifest(t, base, fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    repos:
-      - repo: owner/pipe
+owner:
+  repos:
+    - repo: owner/pipe
 `, base))
 
 	result := runRPJSON(t, binary, manifest, "diff")
@@ -1967,9 +1932,8 @@ func TestQA_UpDryRunDoesNotClone(t *testing.T) {
 
 	manifest := writeManifest(t, base, fmt.Sprintf(`
 base_dir: %s
-owners:
-  test:
-    - repo: test/repo
+test:
+  - repo: test/repo
 `, wsDir))
 
 	result := runUpJSON(t, binary, manifest, "--dry-run")
@@ -1993,10 +1957,9 @@ func TestQA_BootstrapSummaryPlural(t *testing.T) {
 
 	manifest := writeManifest(t, base, fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    repos:
-      - repo: owner/existing
+owner:
+  repos:
+    - repo: owner/existing
 `, base))
 
 	// Run bootstrap (human mode) and check summary
@@ -2040,9 +2003,8 @@ func TestDiscoverGhNotFound(t *testing.T) {
 	initGitRepo(t, repoDir)
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  owner:
-    - repo: owner/repo
+owner:
+  - repo: owner/repo
 `, base))
 
 	// Run with PATH set to a nonexistent dir so gh cannot be found.
@@ -2082,9 +2044,8 @@ func TestDiscoverJSONSchema(t *testing.T) {
 	initGitRepo(t, repoDir)
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  nobody:
-    - repo: nobody/nonexistent
+nobody:
+  - repo: nobody/nonexistent
 `, base))
 
 	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
@@ -2138,9 +2099,8 @@ func TestDiscoverCompact(t *testing.T) {
 	initGitRepo(t, repoDir)
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  nobody:
-    - repo: nobody/nonexistent
+nobody:
+  - repo: nobody/nonexistent
 `, base))
 
 	cmd := exec.Command(binary, "--json", "--compact", "--manifest", manifestPath, "discover")
@@ -2165,9 +2125,8 @@ func TestDiscoverFilterNonexistent(t *testing.T) {
 	initGitRepo(t, repoDir)
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  nobody:
-    - repo: nobody/nonexistent
+nobody:
+  - repo: nobody/nonexistent
 `, base))
 
 	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "--filter", "nonexistent/", "discover")
@@ -2198,9 +2157,8 @@ func TestDiscoverExitCode1(t *testing.T) {
 	// Manifest with a single dummy repo — all real GitHub repos will be untracked.
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
-owners:
-  nobody:
-    - repo: nobody/nonexistent
+nobody:
+  - repo: nobody/nonexistent
 `, base))
 
 	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
@@ -2226,4 +2184,38 @@ owners:
 		t.Fatalf("expected exit 1 (untracked repos found), got %d", exitCode)
 	}
 	assertFloat(t, result, "exit_code", 1)
+}
+
+// QA v0.5.0 — Q4: old-format manifest with owners: key produces JSON error with migration hint
+func TestQA_IntegrationOldFormatRejectsJSON(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+
+	manifest := writeManifest(t, dir, `
+base_dir: `+dir+`
+owners:
+  owner:
+    projects:
+      - repo: owner/myrepo
+`)
+
+	result := runRPJSON(t, binary, manifest, "status")
+
+	assertFloat(t, result, "exit_code", 2)
+
+	errVal, ok := result["error"].(string)
+	if !ok || errVal == "" {
+		t.Fatalf("expected non-empty error field, got %v", result["error"])
+	}
+	if !strings.Contains(errVal, "is no longer a valid manifest key") {
+		t.Errorf("error should contain migration message, got: %q", errVal)
+	}
+
+	hintVal, ok := result["hint"].(string)
+	if !ok || hintVal == "" {
+		t.Fatalf("expected non-empty hint field, got %v", result["hint"])
+	}
+	if !strings.Contains(hintVal, "dedent owner blocks by one level") {
+		t.Errorf("hint should contain dedent instruction, got: %q", hintVal)
+	}
 }
