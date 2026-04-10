@@ -1,10 +1,13 @@
 package manifest
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deligoez/rp/internal/output"
 )
 
 // writeManifest writes content to a temp file and returns its path.
@@ -21,14 +24,13 @@ func TestParseValidManifest(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
-      - repo: deligoez/rp
-  phonyland:
-    - repo: phonyland/cloud
-    - repo: phonyland/framework
+deligoez:
+  projects:
+    - repo: deligoez/tp
+    - repo: deligoez/rp
+phonyland:
+  - repo: phonyland/cloud
+  - repo: phonyland/framework
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -92,8 +94,7 @@ func TestCategorizedPath(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: deligoez/tp
 `
@@ -120,8 +121,7 @@ func TestFlatPath(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  phonyland:
+phonyland:
     - repo: phonyland/cloud
 `
 	path := writeManifest(t, content)
@@ -155,10 +155,9 @@ owners:
 func TestTildeExpansion(t *testing.T) {
 	content := `
 base_dir: ~/Developer
-owners:
-  deligoez:
-    projects:
-      - repo: deligoez/tp
+deligoez:
+  projects:
+    - repo: deligoez/tp
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -183,7 +182,6 @@ owners:
 // Test 7: Missing base_dir — YAML without base_dir → error
 func TestMissingBaseDir(t *testing.T) {
 	content := `
-owners:
   deligoez:
     projects:
       - repo: deligoez/tp
@@ -200,8 +198,7 @@ func TestInvalidRepoFormat(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: invalid
 `
@@ -217,8 +214,7 @@ func TestDuplicateRepos(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: deligoez/tp
     tools:
@@ -236,7 +232,6 @@ func TestEmptyManifest(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners: {}
 `
 	path := writeManifest(t, content)
 	_, err := Load(path)
@@ -252,8 +247,7 @@ func TestRepoWithDeps(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: deligoez/tp
         deps:
@@ -288,8 +282,7 @@ func TestRepoWithoutDeps(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: deligoez/tp
 `
@@ -313,8 +306,7 @@ func TestCrossOwnerRepo(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: acme/tool
 `
@@ -349,8 +341,7 @@ func TestEmptyCategoryList(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects: []
 `
 	path := writeManifest(t, content)
@@ -365,17 +356,16 @@ func TestManifestOrderPreserved(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  alice:
-    alpha:
-      - repo: alice/aaa
-      - repo: alice/bbb
-    beta:
-      - repo: alice/ccc
-  bob:
-    gamma:
-      - repo: bob/ddd
-      - repo: bob/eee
+alice:
+  alpha:
+    - repo: alice/aaa
+    - repo: alice/bbb
+  beta:
+    - repo: alice/ccc
+bob:
+  gamma:
+    - repo: bob/ddd
+    - repo: bob/eee
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -402,8 +392,7 @@ func TestEmptyStringInDeps(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  deligoez:
+deligoez:
     projects:
       - repo: deligoez/tp
         deps:
@@ -425,8 +414,8 @@ func TestQA_EmptyManifestFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty manifest")
 	}
-	if !strings.Contains(err.Error(), "base_dir") {
-		t.Errorf("error should mention base_dir: %v", err)
+	if !strings.Contains(err.Error(), "manifest is empty") {
+		t.Errorf("error should mention empty manifest: %v", err)
 	}
 }
 
@@ -450,9 +439,8 @@ func TestQA_NoOwners(t *testing.T) {
 func TestQA_EmptyCategoryList(t *testing.T) {
 	content := `
 base_dir: /tmp/test
-owners:
-  owner1:
-    projects: []
+owner1:
+  projects: []
 `
 	path := writeManifest(t, content)
 	_, err := Load(path)
@@ -469,8 +457,7 @@ func TestQA_CrossOwnerPath(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  myteam:
+myteam:
     libs:
       - repo: spf13/cobra
 `
@@ -495,8 +482,7 @@ func TestFlatOwnerAsSequence(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  myowner:
+myowner:
     - repo: myowner/repo1
     - repo: myowner/repo2
 `
@@ -524,8 +510,7 @@ func TestCategorizedOwnerAsMapping(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  myowner:
+myowner:
     tools:
       - repo: myowner/tool1
     libs:
@@ -550,8 +535,7 @@ func TestOwnerValueScalarError(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  myowner: invalid
+myowner: invalid
 `
 	path := writeManifest(t, content)
 	_, err := Load(path)
@@ -564,12 +548,11 @@ func TestMixedOwnerTypes(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
-owners:
-  catowner:
-    projects:
-      - repo: catowner/proj1
-  flatowner:
-    - repo: flatowner/repo1
+catowner:
+  projects:
+    - repo: catowner/proj1
+flatowner:
+  - repo: flatowner/repo1
 `
 	path := writeManifest(t, content)
 	m, err := Load(path)
@@ -586,5 +569,69 @@ owners:
 	}
 	if !owners[1].IsFlat {
 		t.Error("flatowner should be flat")
+	}
+}
+
+// QA v0.5.0 — Q1: owners key rejected with migration hint
+func TestQA_OwnersKeyRejectsWithHint(t *testing.T) {
+	content := `
+base_dir: /tmp/test
+owners:
+  deligoez:
+    projects:
+      - repo: deligoez/tp
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for legacy owners key")
+	}
+	if !strings.Contains(err.Error(), `"owners" is no longer a valid manifest key`) {
+		t.Errorf("error should contain migration message, got: %v", err)
+	}
+	var he *output.HintError
+	if !errors.As(err, &he) {
+		t.Fatalf("expected HintError, got %T", err)
+	}
+	if !strings.Contains(he.Hint, "dedent owner blocks by one level") {
+		t.Errorf("hint should contain dedent instruction, got: %q", he.Hint)
+	}
+}
+
+// QA v0.5.0 — Q2: root not mapping
+func TestQA_RootNotMapping(t *testing.T) {
+	content := `
+- item1
+- item2
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for non-mapping root")
+	}
+	if !strings.Contains(err.Error(), "manifest must be a YAML mapping at the top level") {
+		t.Errorf("error should mention mapping requirement, got: %v", err)
+	}
+}
+
+// QA v0.5.0 — Q3: owners key short-circuits before base_dir validation
+func TestQA_OwnersKeyShortCircuits(t *testing.T) {
+	// Manifest has owners: but no base_dir — only the owners error should appear.
+	content := `
+owners:
+  deligoez:
+    projects:
+      - repo: deligoez/tp
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), `"owners" is no longer a valid manifest key`) {
+		t.Errorf("should get owners migration error, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "base_dir") {
+		t.Errorf("should NOT get base_dir error when owners key is present, got: %v", err)
 	}
 }
