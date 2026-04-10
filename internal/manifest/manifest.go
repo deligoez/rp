@@ -153,12 +153,6 @@ func (m *Manifest) validate() error {
 	return nil
 }
 
-// rawManifest is used for initial YAML decoding of the top-level structure.
-type rawManifest struct {
-	BaseDir string    `yaml:"base_dir"`
-	Owners  yaml.Node `yaml:"owners"`
-}
-
 // rawRepo represents a single repo entry as found in YAML.
 type rawRepo struct {
 	Repo string   `yaml:"repo"`
@@ -179,16 +173,63 @@ func Load(path string) (*Manifest, error) {
 		return nil, fmt.Errorf("reading manifest: %w", err)
 	}
 
-	var raw rawManifest
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	// Step 1: Decode into raw yaml.Node.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, output.NewHintError(
 			fmt.Errorf("parsing manifest YAML: %w", err),
 			fmt.Sprintf("check manifest syntax at %s", path),
 		)
 	}
 
-	// Expand tilde in base_dir before path resolution.
-	expandedBaseDir, err := expandTilde(raw.BaseDir)
+	// Step 2: Unwrap DocumentNode → Content[0].
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, output.NewHintError(
+			fmt.Errorf("manifest is empty"),
+			"run rp manifest init to generate one",
+		)
+	}
+	root := doc.Content[0]
+
+	// Step 3: Validate root is a MappingNode.
+	if root.Kind != yaml.MappingNode {
+		return nil, output.NewHintError(
+			fmt.Errorf("manifest must be a YAML mapping at the top level"),
+			"ensure manifest starts with key: value pairs, not a list",
+		)
+	}
+
+	// Scan top-level keys: check for duplicates, non-scalar keys, and reserved 'owners' key.
+	seenKeys := make(map[string]bool)
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		keyNode := root.Content[i]
+		if keyNode.Kind != yaml.ScalarNode {
+			return nil, fmt.Errorf("manifest: top-level key at line %d must be a string", keyNode.Line)
+		}
+		if seenKeys[keyNode.Value] {
+			return nil, fmt.Errorf("manifest: duplicate key %q", keyNode.Value)
+		}
+		seenKeys[keyNode.Value] = true
+	}
+
+	// Step 4: Check for legacy 'owners' key — short-circuit with migration hint.
+	if seenKeys["owners"] {
+		return nil, output.NewHintError(
+			fmt.Errorf("\"owners\" is no longer a valid manifest key"),
+			"Remove the \"owners:\" line and dedent owner blocks by one level.",
+		)
+	}
+
+	// Step 5: Extract base_dir.
+	var baseDir string
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "base_dir" {
+			baseDir = root.Content[i+1].Value
+			break
+		}
+	}
+
+	expandedBaseDir, err := expandTilde(baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("expanding base_dir: %w", err)
 	}
@@ -197,12 +238,22 @@ func Load(path string) (*Manifest, error) {
 		BaseDir: expandedBaseDir,
 	}
 
-	if raw.Owners.Kind != 0 {
-		owners, err := parseOwners(&raw.Owners)
-		if err != nil {
-			return nil, fmt.Errorf("parsing owners: %w", err)
+	// Steps 6-7: Iterate non-reserved top-level keys as owner names, in document order.
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		keyNode := root.Content[i]
+		valNode := root.Content[i+1]
+		ownerName := keyNode.Value
+
+		// Skip reserved keys.
+		if ownerName == "base_dir" {
+			continue
 		}
-		m.owners = owners
+
+		group, err := parseOwnerNode(ownerName, valNode)
+		if err != nil {
+			return nil, fmt.Errorf("owner %q: %w", ownerName, err)
+		}
+		m.owners = append(m.owners, group)
 	}
 
 	// Resolve local paths for every repo entry now that BaseDir is expanded.
@@ -219,6 +270,7 @@ func Load(path string) (*Manifest, error) {
 		}
 	}
 
+	// Step 8: Validate.
 	if err := m.validate(); err != nil {
 		return nil, err
 	}
@@ -226,43 +278,6 @@ func Load(path string) (*Manifest, error) {
 	return m, nil
 }
 
-// parseOwners iterates the yaml.Node for the "owners" mapping, preserving key order.
-func parseOwners(node *yaml.Node) ([]OwnerGroup, error) {
-	// Unwrap document node if present.
-	n := node
-	if n.Kind == yaml.DocumentNode {
-		if len(n.Content) == 0 {
-			return nil, nil
-		}
-		n = n.Content[0]
-	}
-
-	if n.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("owners must be a mapping, got kind %d", n.Kind)
-	}
-
-	var groups []OwnerGroup
-
-	// MappingNode Content is [key, value, key, value, ...]
-	for i := 0; i+1 < len(n.Content); i += 2 {
-		keyNode := n.Content[i]
-		valNode := n.Content[i+1]
-
-		ownerName := keyNode.Value
-
-		group, err := parseOwnerNode(ownerName, valNode)
-		if err != nil {
-			return nil, fmt.Errorf("owner %q: %w", ownerName, err)
-		}
-
-		groups = append(groups, group)
-	}
-
-	return groups, nil
-}
-
-// parseOwnerNode parses a single owner's value node into an OwnerGroup.
-// Keys are iterated in document order via yaml.Node to preserve YAML key order.
 // parseOwnerNode parses a single owner's value node into an OwnerGroup.
 // A SequenceNode means flat (repos listed directly), a MappingNode means categorized.
 func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {

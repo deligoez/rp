@@ -326,11 +326,7 @@ func generateYAML(scanRoot string, layouts []ownerLayout) ([]byte, error) {
 	// base_dir
 	addStringPair(mapping, "base_dir", scanRoot)
 
-	// owners
-	ownersKey := scalarNode("owners")
-	ownersVal := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	mapping.Content = append(mapping.Content, ownersKey, ownersVal)
-
+	// Owner key/value pairs appended directly to root mapping (no owners wrapper).
 	for _, layout := range layouts {
 		ownerKey := scalarNode(layout.ownerDirName)
 
@@ -342,7 +338,7 @@ func generateYAML(scanRoot string, layouts []ownerLayout) ([]byte, error) {
 				addStringPair(repoEntry, "repo", r.ghRepo)
 				ownerVal.Content = append(ownerVal.Content, repoEntry)
 			}
-			ownersVal.Content = append(ownersVal.Content, ownerKey, ownerVal)
+			mapping.Content = append(mapping.Content, ownerKey, ownerVal)
 		} else {
 			// Categorized owner: emit as a mapping with category keys.
 			ownerVal := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
@@ -376,7 +372,7 @@ func generateYAML(scanRoot string, layouts []ownerLayout) ([]byte, error) {
 				ownerVal.Content = append(ownerVal.Content, catKey, catVal)
 			}
 
-			ownersVal.Content = append(ownersVal.Content, ownerKey, ownerVal)
+			mapping.Content = append(mapping.Content, ownerKey, ownerVal)
 		}
 	}
 
