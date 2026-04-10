@@ -1,0 +1,154 @@
+[
+  {
+    "id": "rewrite-load",
+    "title": "Rewrite Load as yaml.Node parser",
+    "description": "Replace rawManifest struct-based parsing with raw yaml.Node decoding. Extract base_dir manually, iterate top-level keys as owners.",
+    "acceptance": "DocumentNode unwrap with empty doc error. Root MappingNode validation with HintError. base_dir extracted from yaml.Node as scalar string.",
+    "source_lines": "49-92",
+    "tags": [
+      "core"
+    ],
+    "estimate_minutes": 15,
+    "status": "open"
+  },
+  {
+    "id": "owners-reject",
+    "title": "Add owners key short-circuit rejection",
+    "description": "Detect legacy owners key and return migration HintError before any other validation.",
+    "acceptance": "HintError with exact error/hint text per spec. Short-circuits before base_dir extraction. parseOwners() function removed.",
+    "source_lines": "107-115",
+    "depends_on": [
+      "rewrite-load"
+    ],
+    "tags": [
+      "core"
+    ],
+    "estimate_minutes": 10,
+    "status": "open"
+  },
+  {
+    "id": "duplicate-keys",
+    "title": "Add R8 duplicate key validation",
+    "description": "Reject duplicate top-level keys during root mapping iteration.",
+    "acceptance": "Duplicate top-level keys rejected with error including key name. Non-scalar keys rejected.",
+    "source_lines": "72-73,107",
+    "depends_on": [
+      "rewrite-load"
+    ],
+    "tags": [
+      "core"
+    ],
+    "estimate_minutes": 5,
+    "status": "open"
+  },
+  {
+    "id": "manifest-init",
+    "title": "Remove owners wrapper from generateYAML",
+    "description": "Delete ownersKey/ownersVal nodes, append owner pairs directly to root mapping.",
+    "acceptance": "ownersKey/ownersVal deleted. Owner nodes appended to mapping.Content. Blank line between base_dir and first owner preserved.",
+    "source_lines": "117-143",
+    "depends_on": [
+      "rewrite-load"
+    ],
+    "tags": [
+      "core"
+    ],
+    "estimate_minutes": 10,
+    "status": "open"
+  },
+  {
+    "id": "unit-test-yaml",
+    "title": "Update unit test YAML snippets",
+    "description": "Remove owners: line and dedent owner blocks in all manifest_test.go YAML snippets.",
+    "acceptance": "All owners: removed from YAML in manifest_test.go. All existing tests pass. No assertion changes.",
+    "source_lines": "146-165",
+    "depends_on": [
+      "rewrite-load",
+      "owners-reject",
+      "duplicate-keys"
+    ],
+    "tags": [
+      "tests"
+    ],
+    "estimate_minutes": 10,
+    "status": "open"
+  },
+  {
+    "id": "qa-unit-tests",
+    "title": "Add QA unit tests Q1-Q3",
+    "description": "Add regression tests for owners rejection, root-not-mapping, and short-circuit behavior.",
+    "acceptance": "Q1: error contains exact migration text. Q2: error contains root mapping message. Q3: only owners error returned when base_dir also missing.",
+    "source_lines": "183-191",
+    "depends_on": [
+      "unit-test-yaml"
+    ],
+    "tags": [
+      "tests"
+    ],
+    "estimate_minutes": 10,
+    "status": "open"
+  },
+  {
+    "id": "integration-test-yaml",
+    "title": "Update integration test YAML snippets",
+    "description": "Remove owners: from all YAML in cmd/json_test.go via grep-and-update.",
+    "acceptance": "All owners: removed from json_test.go YAML. All integration tests pass.",
+    "source_lines": "173-176",
+    "depends_on": [
+      "rewrite-load",
+      "owners-reject",
+      "duplicate-keys",
+      "manifest-init"
+    ],
+    "tags": [
+      "tests"
+    ],
+    "estimate_minutes": 10,
+    "status": "open"
+  },
+  {
+    "id": "qa-integration-test",
+    "title": "Add QA integration test Q4",
+    "description": "Test that old-format manifest produces JSON error with migration hint.",
+    "acceptance": "Exit code 2. JSON error field contains migration text. JSON hint field contains dedent instruction.",
+    "source_lines": "190-191",
+    "depends_on": [
+      "integration-test-yaml"
+    ],
+    "tags": [
+      "tests"
+    ],
+    "estimate_minutes": 5,
+    "status": "open"
+  },
+  {
+    "id": "docs-readme",
+    "title": "Update README manifest example",
+    "description": "Remove owners: wrapper from manifest format example in README.md.",
+    "acceptance": "README manifest example has no owners: wrapper. Owners are top-level keys.",
+    "source_lines": "194-196",
+    "depends_on": [
+      "rewrite-load"
+    ],
+    "tags": [
+      "docs"
+    ],
+    "estimate_minutes": 5,
+    "status": "open"
+  },
+  {
+    "id": "docs-claude",
+    "title": "Update CLAUDE.md manifest references",
+    "description": "Update manifest format, validation rules, and structural references in CLAUDE.md.",
+    "acceptance": "Manifest Format example updated. Validation rules R5/R8 updated. Project Structure description updated.",
+    "source_lines": "198-205",
+    "depends_on": [
+      "rewrite-load"
+    ],
+    "tags": [
+      "docs"
+    ],
+    "estimate_minutes": 5,
+    "status": "open"
+  }
+]
