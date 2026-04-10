@@ -55,29 +55,28 @@ The manifest lives at `~/.config/rp/manifest.yaml` (override with `-m` or `RP_MA
 ```yaml
 base_dir: ~/Developer
 
-owners:
-  acme:                              # mapping → categorized
-    services:
-      - repo: acme/api
-        deps:
-          - go mod download
-      - repo: acme/web
-        deps:
-          - npm install
-    libraries:
-      - repo: acme/shared-utils
-
-  opensource:                        # sequence → flat
-    - repo: opensource/design-system
-    - repo: opensource/cli-tools
+acme:                              # mapping → categorized
+  services:
+    - repo: acme/api
       deps:
-        - cargo build
-
-  vendor:                            # sequence → flat
-    - repo: vendor/payments
+        - go mod download
+    - repo: acme/web
       deps:
-        - composer install
         - npm install
+  libraries:
+    - repo: acme/shared-utils
+
+opensource:                        # sequence → flat
+  - repo: opensource/design-system
+  - repo: opensource/cli-tools
+    deps:
+      - cargo build
+
+vendor:                            # sequence → flat
+  - repo: vendor/payments
+    deps:
+      - composer install
+      - npm install
 ```
 
 ### Directory mapping

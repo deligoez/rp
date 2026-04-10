@@ -158,18 +158,17 @@ Location: `~/.config/rp/manifest.yaml`
 ```yaml
 base_dir: ~/Developer
 
-owners:
-  acme:                              # mapping → categorized
-    services:
-      - repo: acme/api
-        deps:
-          - go mod download
-      - repo: acme/web
-        deps:
-          - npm install
-  opensource:                        # sequence → flat
-    - repo: opensource/design-system
-    - repo: opensource/tools
+acme:                              # mapping → categorized
+  services:
+    - repo: acme/api
+      deps:
+        - go mod download
+    - repo: acme/web
+      deps:
+        - npm install
+opensource:                        # sequence → flat
+  - repo: opensource/design-system
+  - repo: opensource/tools
 ```
 
 ### Path Rules
@@ -182,9 +181,10 @@ owners:
 2. `repo` must match `{owner}/{name}` (alphanumeric, hyphens, underscores, dots)
 3. No duplicate repos across entire manifest
 4. Owner and category names must be valid directory names (no `/`, `..`, null bytes)
-5. At least one owner with at least one repo
+5. At least one owner with at least one repo (top-level keys beyond `base_dir`)
 6. Categories must contain a non-empty repo list
 7. `deps` entries must be non-empty strings
+8. No duplicate top-level keys
 
 ### Key Data Structures
 - **RepoEntry**: Repo, Owner, Category (empty for flat), LocalPath, CloneURL, Deps
