@@ -19,3 +19,4 @@ coverage.out
 *.tasks.json
 *.tasks.json.lock
 *.ndjson
+.tp-active
