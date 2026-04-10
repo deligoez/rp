@@ -132,8 +132,7 @@ main.go                   Entry point
 ```
 
 ### Spec File Convention
-- Specs live in `spec/v{version}/` folders, prefixed with the release version they target
-- Each folder contains `spec.md` and `tasks.json` with matching names
+- Specs live in `spec/` as flat files: `v{version}.md` and `v{version}.json`
 - Suffix variants (e.g. `v0.1.0-ax`) are allowed for additive specs within a release
 
 ## Conventions
