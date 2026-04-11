@@ -208,9 +208,13 @@ func TestUpResultWithThreeSubResults(t *testing.T) {
 			Summary: "synced 2 repos",
 			Repos:   []string{"a", "b"},
 		},
-		Deps: &SubResult{
-			Summary: "deps installed",
+		Install: &SubResult{
+			Summary: "install done",
 			Repos:   []string{"a"},
+		},
+		Update: &SubResult{
+			Summary: "update done",
+			Repos:   []string{"b"},
 		},
 	}
 
@@ -224,15 +228,15 @@ func TestUpResultWithThreeSubResults(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	for _, key := range []string{"bootstrap", "sync", "deps"} {
+	for _, key := range []string{"bootstrap", "sync", "install", "update"} {
 		if _, ok := m[key]; !ok {
 			t.Errorf("expected %q key to be present in UpResult JSON", key)
 		}
 	}
 }
 
-// Test 8: UpResult with nil Deps — deps key omitted from JSON.
-func TestUpResultNilDepsOmitted(t *testing.T) {
+// Test 8: UpResult with nil Install/Update — keys present as null (no omitempty).
+func TestUpResultNilInstallUpdatePresent(t *testing.T) {
 	r := UpResult{
 		Command:  "up",
 		ExitCode: 0,
@@ -242,7 +246,8 @@ func TestUpResultNilDepsOmitted(t *testing.T) {
 		Sync: &SubResult{
 			Summary: "synced 1 repo",
 		},
-		Deps: nil,
+		Install: nil,
+		Update:  nil,
 	}
 
 	b, err := json.Marshal(r)
@@ -255,8 +260,12 @@ func TestUpResultNilDepsOmitted(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	if _, ok := m["deps"]; ok {
-		t.Error("expected deps key to be absent when Deps is nil")
+	// install and update must be present (as null) even when nil — no omitempty.
+	if _, ok := m["install"]; !ok {
+		t.Error("expected install key to be present (as null) when Install is nil")
+	}
+	if _, ok := m["update"]; !ok {
+		t.Error("expected update key to be present (as null) when Update is nil")
 	}
 	if _, ok := m["bootstrap"]; !ok {
 		t.Error("expected bootstrap key to be present")

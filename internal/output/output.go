@@ -34,7 +34,8 @@ type UpResult struct {
 	DryRun    bool       `json:"dry_run,omitempty"`
 	Bootstrap *SubResult `json:"bootstrap,omitempty"`
 	Sync      *SubResult `json:"sync,omitempty"`
-	Deps      *SubResult `json:"deps,omitempty"`
+	Install   *SubResult `json:"install"`
+	Update    *SubResult `json:"update"`
 }
 
 // SubResult holds one phase's output within an UpResult.
@@ -113,8 +114,11 @@ func PrintAndExit(v interface{}) {
 			if r.Sync != nil {
 				r.Sync.Repos = nil
 			}
-			if r.Deps != nil {
-				r.Deps.Repos = nil
+			if r.Install != nil {
+				r.Install.Repos = nil
+			}
+			if r.Update != nil {
+				r.Update.Repos = nil
 			}
 			v = r
 		}
