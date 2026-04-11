@@ -4,34 +4,34 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/deligoez/rp/internal/deps"
 	"github.com/deligoez/rp/internal/manifest"
 	"github.com/deligoez/rp/internal/output"
+	"github.com/deligoez/rp/internal/runner"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
 	"github.com/spf13/cobra"
 )
 
-// depsRepoResult holds the outcome of running deps for a single repo.
-type depsRepoResult struct {
-	entry    manifest.RepoEntry
-	skipped  bool
-	skipMsg  string
-	results  []depsCommandResult
+// updateRepoResult holds the outcome of running update for a single repo.
+type updateRepoResult struct {
+	entry   manifest.RepoEntry
+	skipped bool
+	skipMsg string
+	results []updateCommandResult
 }
 
-// depsCommandResult holds the outcome of a single command within a repo.
-type depsCommandResult struct {
+// updateCommandResult holds the outcome of a single command within a repo.
+type updateCommandResult struct {
 	command string
 	failed  bool
 	errMsg  string
 }
 
-var depsDryRun bool
+var updateDryRun bool
 
-var depsCmd = &cobra.Command{
-	Use:   "deps [repo]",
-	Short: "Run dependency install commands defined in the manifest",
+var updateCmd = &cobra.Command{
+	Use:   "update [repo]",
+	Short: "Run update commands defined in the manifest",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.SetNoColor(NoColor)
@@ -39,7 +39,7 @@ var depsCmd = &cobra.Command{
 		m, err := manifest.Load(ManifestPath)
 		if err != nil {
 			if output.IsJSON() {
-				output.PrintErrorAndExit("deps", err)
+				output.PrintErrorAndExit("update", err)
 			}
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(2)
@@ -60,21 +60,22 @@ var depsCmd = &cobra.Command{
 			for _, r := range allRepos {
 				if r.Repo == filter {
 					found = true
-					if len(r.Deps) == 0 {
+					if len(r.Update) == 0 {
 						if output.IsJSON() {
 							output.PrintAndExit(output.SuccessResult{
-								Command:  "deps",
+								Command:  "update",
 								ExitCode: 0,
 								Summary: map[string]int{
 									"succeeded": 0,
 									"failed":    0,
 									"skipped":   0,
 									"total":     0,
+									"commands":  0,
 								},
 								Repos: []interface{}{},
 							})
 						}
-						fmt.Printf("no deps configured for %s\n", filter)
+						fmt.Printf("no update commands configured for %s\n", filter)
 						return nil
 					}
 					targets = append(targets, r)
@@ -87,42 +88,43 @@ var depsCmd = &cobra.Command{
 					"check repo name, available: rp list --json",
 				)
 				if output.IsJSON() {
-					output.PrintErrorAndExit("deps", notFoundErr)
+					output.PrintErrorAndExit("update", notFoundErr)
 				}
 				fmt.Fprintf(os.Stderr, "%s\n", output.FormatHumanError(notFoundErr))
 				os.Exit(2)
 			}
 		} else {
-			// No positional arg: collect all repos that have deps defined, then apply --filter.
-			var withDeps []manifest.RepoEntry
+			// No positional arg: collect all repos that have update defined, then apply --filter.
+			var withUpdate []manifest.RepoEntry
 			for _, r := range allRepos {
-				if len(r.Deps) > 0 {
-					withDeps = append(withDeps, r)
+				if len(r.Update) > 0 {
+					withUpdate = append(withUpdate, r)
 				}
 			}
-			targets = manifest.FilterRepos(withDeps, Filters)
+			targets = manifest.FilterRepos(withUpdate, Filters)
 		}
 
 		if len(targets) == 0 {
 			if output.IsJSON() {
 				output.PrintAndExit(output.SuccessResult{
-					Command:  "deps",
+					Command:  "update",
 					ExitCode: 0,
 					Summary: map[string]int{
 						"succeeded": 0,
 						"failed":    0,
 						"skipped":   0,
 						"total":     0,
+						"commands":  0,
 					},
 					Repos: []interface{}{},
 				})
 			}
-			fmt.Println("no repos with deps defined")
+			fmt.Println("no repos with update commands defined")
 			return nil
 		}
 
 		// --dry-run: list commands that would run without executing them.
-		if depsDryRun {
+		if updateDryRun {
 			type jsonCommandEntry struct {
 				Command string `json:"command"`
 				Status  string `json:"status"`
@@ -155,8 +157,8 @@ var depsCmd = &cobra.Command{
 
 				dryRepos++
 				if output.IsJSON() {
-					cmds := make([]jsonCommandEntry, 0, len(target.Deps))
-					for _, command := range target.Deps {
+					cmds := make([]jsonCommandEntry, 0, len(target.Update))
+					for _, command := range target.Update {
 						dryCommands++
 						cmds = append(cmds, jsonCommandEntry{Command: command, Status: "would_run"})
 					}
@@ -170,7 +172,7 @@ var depsCmd = &cobra.Command{
 
 			if output.IsJSON() {
 				output.PrintAndExit(output.SuccessResult{
-					Command:  "deps",
+					Command:  "update",
 					ExitCode: 0,
 					DryRun:   true,
 					Summary: map[string]int{
@@ -210,7 +212,7 @@ var depsCmd = &cobra.Command{
 
 					label := repoLabel(entry)
 					paddedLabel := ui.PadRight(label, 24)
-					for _, command := range entry.Deps {
+					for _, command := range entry.Update {
 						dryCommands++
 						fmt.Printf("  %s would run: %s\n", paddedLabel, command)
 					}
@@ -225,10 +227,10 @@ var depsCmd = &cobra.Command{
 			return nil
 		}
 
-		// Run deps for each target repo via worker pool.
-		opts := worker.PoolOptions{Verb: "installing"}
-		results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (depsRepoResult, error) {
-			result := depsRepoResult{entry: entry}
+		// Run update for each target repo via worker pool.
+		opts := worker.PoolOptions{Verb: "updating"}
+		results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (updateRepoResult, error) {
+			result := updateRepoResult{entry: entry}
 
 			// Check if repo exists on disk.
 			if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
@@ -237,10 +239,10 @@ var depsCmd = &cobra.Command{
 				return result, nil
 			}
 
-			// Run each dep command sequentially, stopping on first failure.
-			for _, command := range entry.Deps {
-				err := deps.RunDeps(entry.LocalPath, []string{command})
-				cr := depsCommandResult{command: command}
+			// Run each update command sequentially, stopping on first failure.
+			for _, command := range entry.Update {
+				err := runner.RunCommands(entry.LocalPath, []string{command})
+				cr := updateCommandResult{command: command}
 				if err != nil {
 					cr.failed = true
 					cr.errMsg = err.Error()
@@ -255,7 +257,7 @@ var depsCmd = &cobra.Command{
 		})
 
 		// Build a map from repo -> result for ordered display.
-		resultMap := make(map[string]depsRepoResult, len(results))
+		resultMap := make(map[string]updateRepoResult, len(results))
 		for _, r := range results {
 			resultMap[r.Value.entry.Repo] = r.Value
 		}
@@ -263,6 +265,7 @@ var depsCmd = &cobra.Command{
 		succeeded := 0
 		failed := 0
 		skipped := 0
+		totalCommands := 0
 		anyFailed := false
 
 		// JSON output path.
@@ -301,6 +304,7 @@ var depsCmd = &cobra.Command{
 				var cmds []jsonCommandEntry
 				for _, cr := range res.results {
 					entry := jsonCommandEntry{Command: cr.command}
+					totalCommands++
 					if cr.failed {
 						entry.Status = "failed"
 						entry.Error = cr.errMsg
@@ -328,18 +332,22 @@ var depsCmd = &cobra.Command{
 			}
 
 			exitCode := 0
+			if skipped > 0 {
+				exitCode = 1
+			}
 			if anyFailed {
 				exitCode = 2
 			}
 
 			output.PrintAndExit(output.SuccessResult{
-				Command:  "deps",
+				Command:  "update",
 				ExitCode: exitCode,
 				Summary: map[string]int{
 					"succeeded": succeeded,
 					"failed":    failed,
 					"skipped":   skipped,
 					"total":     len(targets),
+					"commands":  totalCommands,
 				},
 				Repos: jsonRepos,
 			})
@@ -373,6 +381,7 @@ var depsCmd = &cobra.Command{
 				// Print a line per command result.
 				repoFailed := false
 				for _, cr := range res.results {
+					totalCommands++
 					if cr.failed {
 						fmt.Printf("  %s FAILED: %s (%s)\n",
 							paddedLabel,
@@ -401,14 +410,24 @@ var depsCmd = &cobra.Command{
 		// Summary line.
 		fmt.Println()
 		fmt.Println(ui.SummaryLine(
-			fmt.Sprintf("%s succeeded, %d failed",
-				ui.Plural(succeeded, "repo"),
+			fmt.Sprintf("%s, %s succeeded, %d skipped, %d failed",
+				ui.Plural(len(targets), "repo"),
+				ui.Plural(totalCommands, "command"),
+				skipped,
 				failed,
 			),
 		))
 
+		exitCode := 0
+		if skipped > 0 {
+			exitCode = 1
+		}
 		if anyFailed {
-			os.Exit(2)
+			exitCode = 2
+		}
+
+		if exitCode != 0 {
+			os.Exit(exitCode)
 		}
 
 		return nil
@@ -416,6 +435,6 @@ var depsCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(depsCmd)
-	depsCmd.Flags().BoolVar(&depsDryRun, "dry-run", false, "preview dep commands without executing them")
+	rootCmd.AddCommand(updateCmd)
+	updateCmd.Flags().BoolVar(&updateDryRun, "dry-run", false, "preview update commands without executing them")
 }
