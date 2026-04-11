@@ -51,7 +51,8 @@ type RepoEntry struct {
 	Category  string   // e.g. "projects", empty for flat
 	LocalPath string   // resolved absolute path
 	CloneURL  string   // git@github.com:{repo}.git
-	Deps      []string // shell commands from manifest
+	Install   []string // shell commands for initial setup
+	Update    []string // shell commands for dependency updates
 }
 
 type OwnerGroup struct {
@@ -138,12 +139,20 @@ func (m *Manifest) validate() error {
 			}
 			seen[entry.Repo] = true
 
-			// Rule 7: deps values must be non-empty strings.
-			for i, dep := range entry.Deps {
-				if dep == "" {
+			// Rule 7: install and update entries must be non-empty strings.
+			for i, cmd := range entry.Install {
+				if cmd == "" {
 					return output.NewHintError(
-						fmt.Errorf("manifest: repo %q has empty deps entry at index %d", entry.Repo, i),
-						"deps entries must be non-empty command strings",
+						fmt.Errorf("manifest: repo %q has empty install entry at index %d", entry.Repo, i),
+						"install entries must be non-empty command strings",
+					)
+				}
+			}
+			for i, cmd := range entry.Update {
+				if cmd == "" {
+					return output.NewHintError(
+						fmt.Errorf("manifest: repo %q has empty update entry at index %d", entry.Repo, i),
+						"update entries must be non-empty command strings",
 					)
 				}
 			}
@@ -155,8 +164,9 @@ func (m *Manifest) validate() error {
 
 // rawRepo represents a single repo entry as found in YAML.
 type rawRepo struct {
-	Repo string   `yaml:"repo"`
-	Deps []string `yaml:"deps"`
+	Repo    string   `yaml:"repo"`
+	Install []string `yaml:"install"`
+	Update  []string `yaml:"update"`
 }
 
 // Load reads a manifest YAML file from the given path and returns a parsed Manifest.
@@ -287,6 +297,14 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 	case yaml.SequenceNode:
 		// Flat owner: repos listed directly as a sequence.
 		group.IsFlat = true
+		// Check for legacy deps: key at yaml.Node level before decoding.
+		for _, item := range node.Content {
+			if item.Kind == yaml.MappingNode {
+				if err := checkForDepsKey(item); err != nil {
+					return group, err
+				}
+			}
+		}
 		var rawRepos []rawRepo
 		if err := node.Decode(&rawRepos); err != nil {
 			return group, fmt.Errorf("flat owner must be a list of repo entries: %w", err)
@@ -303,7 +321,8 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 				Owner:    ownerName,
 				Category: "",
 				CloneURL: "git@github.com:" + r.Repo + ".git",
-				Deps:     r.Deps,
+				Install:  r.Install,
+				Update:   r.Update,
 			}
 			group.Repos = append(group.Repos, entry)
 		}
@@ -314,6 +333,17 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 			keyNode := node.Content[i]
 			valNode := node.Content[i+1]
 			key := keyNode.Value
+
+			// Check for legacy deps: key at yaml.Node level.
+			if valNode.Kind == yaml.SequenceNode {
+				for _, item := range valNode.Content {
+					if item.Kind == yaml.MappingNode {
+						if err := checkForDepsKey(item); err != nil {
+							return group, err
+						}
+					}
+				}
+			}
 
 			var rawRepos []rawRepo
 			if err := valNode.Decode(&rawRepos); err != nil {
@@ -331,7 +361,8 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 					Owner:    ownerName,
 					Category: key,
 					CloneURL: "git@github.com:" + r.Repo + ".git",
-					Deps:     r.Deps,
+					Install:  r.Install,
+					Update:   r.Update,
 				}
 				group.Repos = append(group.Repos, entry)
 			}
@@ -345,4 +376,25 @@ func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
 	}
 
 	return group, nil
+}
+
+// checkForDepsKey scans a repo mapping node for the removed "deps" key.
+func checkForDepsKey(repoNode *yaml.Node) error {
+	for i := 0; i+1 < len(repoNode.Content); i += 2 {
+		if repoNode.Content[i].Value == "deps" {
+			// Find repo name for error message.
+			repoName := "unknown"
+			for j := 0; j+1 < len(repoNode.Content); j += 2 {
+				if repoNode.Content[j].Value == "repo" {
+					repoName = repoNode.Content[j+1].Value
+					break
+				}
+			}
+			return output.NewHintError(
+				fmt.Errorf("repo %q uses removed key \"deps\"", repoName),
+				"Rename \"deps:\" to \"install:\" (and optionally add \"update:\").",
+			)
+		}
+	}
+	return nil
 }

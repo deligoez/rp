@@ -241,16 +241,15 @@ base_dir: ` + baseDir + `
 }
 
 
-// Test 13: Repo with deps — deps: ["npm install"] → Deps: ["npm install"]
-// Test 13: Repo with deps — deps: ["npm install"] → Deps: ["npm install"]
-func TestRepoWithDeps(t *testing.T) {
+// Test 13: Repo with install — install: ["npm install"] → Install: ["npm install"]
+func TestRepoWithInstall(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
 deligoez:
     projects:
       - repo: deligoez/tp
-        deps:
+        install:
           - npm install
           - go build ./...
 `
@@ -265,20 +264,20 @@ deligoez:
 		t.Fatalf("expected 1 repo, got %d", len(repos))
 	}
 
-	deps := repos[0].Deps
-	if len(deps) != 2 {
-		t.Fatalf("expected 2 deps, got %d", len(deps))
+	install := repos[0].Install
+	if len(install) != 2 {
+		t.Fatalf("expected 2 install commands, got %d", len(install))
 	}
-	if deps[0] != "npm install" {
-		t.Errorf("deps[0] = %q, want %q", deps[0], "npm install")
+	if install[0] != "npm install" {
+		t.Errorf("install[0] = %q, want %q", install[0], "npm install")
 	}
-	if deps[1] != "go build ./..." {
-		t.Errorf("deps[1] = %q, want %q", deps[1], "go build ./...")
+	if install[1] != "go build ./..." {
+		t.Errorf("install[1] = %q, want %q", install[1], "go build ./...")
 	}
 }
 
-// Test 14: Repo without deps → Deps is nil/empty
-func TestRepoWithoutDeps(t *testing.T) {
+// Test 14: Repo without install or update → Install and Update are nil/empty
+func TestRepoWithoutCommands(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
@@ -296,8 +295,11 @@ deligoez:
 	if len(repos) != 1 {
 		t.Fatalf("expected 1 repo, got %d", len(repos))
 	}
-	if len(repos[0].Deps) != 0 {
-		t.Errorf("expected Deps to be empty, got %v", repos[0].Deps)
+	if len(repos[0].Install) != 0 {
+		t.Errorf("expected Install to be empty, got %v", repos[0].Install)
+	}
+	if len(repos[0].Update) != 0 {
+		t.Errorf("expected Update to be empty, got %v", repos[0].Update)
 	}
 }
 
@@ -387,21 +389,21 @@ bob:
 
 // Test 18: flat with non-boolean — flat: 42 → error
 
-// Test 19: Empty string in deps — deps: [""] → error
-func TestEmptyStringInDeps(t *testing.T) {
+// Test 19: Empty string in install — install: [""] → error
+func TestEmptyStringInInstall(t *testing.T) {
 	baseDir := t.TempDir()
 	content := `
 base_dir: ` + baseDir + `
 deligoez:
     projects:
       - repo: deligoez/tp
-        deps:
+        install:
           - ""
 `
 	path := writeManifest(t, content)
 	_, err := Load(path)
 	if err == nil {
-		t.Fatal("expected error for empty string in deps, got nil")
+		t.Fatal("expected error for empty string in install, got nil")
 	}
 }
 
@@ -633,5 +635,94 @@ owners:
 	}
 	if strings.Contains(err.Error(), "base_dir") {
 		t.Errorf("should NOT get base_dir error when owners key is present, got: %v", err)
+	}
+}
+
+// Test: deps key rejected with migration hint
+func TestDepsKeyRejected(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+deligoez:
+    projects:
+      - repo: deligoez/tp
+        deps:
+          - npm install
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for removed deps key, got nil")
+	}
+	if !strings.Contains(err.Error(), `removed key "deps"`) {
+		t.Errorf("error should mention removed deps key, got: %v", err)
+	}
+	var he *output.HintError
+	if !errors.As(err, &he) {
+		t.Fatalf("expected HintError, got %T", err)
+	}
+	if !strings.Contains(he.Hint, `Rename "deps:" to "install:"`) {
+		t.Errorf("hint should contain rename instruction, got: %q", he.Hint)
+	}
+}
+
+// Test: repo with both install and update
+func TestRepoWithInstallAndUpdate(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+deligoez:
+    projects:
+      - repo: deligoez/tp
+        install:
+          - npm install
+        update:
+          - npm update
+          - go mod tidy
+`
+	path := writeManifest(t, content)
+	m, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	repos := m.Repos()
+	if len(repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(repos))
+	}
+
+	r := repos[0]
+	if len(r.Install) != 1 {
+		t.Fatalf("expected 1 install command, got %d", len(r.Install))
+	}
+	if r.Install[0] != "npm install" {
+		t.Errorf("Install[0] = %q, want %q", r.Install[0], "npm install")
+	}
+	if len(r.Update) != 2 {
+		t.Fatalf("expected 2 update commands, got %d", len(r.Update))
+	}
+	if r.Update[0] != "npm update" {
+		t.Errorf("Update[0] = %q, want %q", r.Update[0], "npm update")
+	}
+	if r.Update[1] != "go mod tidy" {
+		t.Errorf("Update[1] = %q, want %q", r.Update[1], "go mod tidy")
+	}
+}
+
+// Test: empty string in update list
+func TestEmptyStringInUpdate(t *testing.T) {
+	baseDir := t.TempDir()
+	content := `
+base_dir: ` + baseDir + `
+deligoez:
+    projects:
+      - repo: deligoez/tp
+        update:
+          - ""
+`
+	path := writeManifest(t, content)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for empty string in update, got nil")
 	}
 }
