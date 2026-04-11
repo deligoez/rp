@@ -361,26 +361,26 @@ owner:
 }
 
 // ---------------------------------------------------------------------------
-// Test 5: Deps JSON skipped — missing repo has status:skipped, reason:not_on_disk
+// Test 5: Install JSON skipped — missing repo has status:skipped, reason:not_on_disk
 // ---------------------------------------------------------------------------
 
-func TestJSONDepsSkippedNotOnDisk(t *testing.T) {
+func TestJSONInstallSkippedNotOnDisk(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
-	// Repo is not on disk and has a dep defined.
+	// Repo is not on disk and has an install command defined.
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
 owner:
   projects:
     - repo: owner/missing
-      deps:
+      install:
         - echo hello
 `, base))
 
-	result := runRPJSON(t, binary, manifest, "deps")
+	result := runRPJSON(t, binary, manifest, "install")
 
-	assertString(t, result, "command", "deps")
+	assertString(t, result, "command", "install")
 
 	repos := assertKey(t, result, "repos").([]interface{})
 	if len(repos) != 1 {
@@ -591,7 +591,7 @@ func assertSubResult(t *testing.T, result map[string]interface{}, key string) ma
 }
 
 // ---------------------------------------------------------------------------
-// Test Up-1: Up all phases — JSON has bootstrap, sync, and deps sections
+// Test Up-1: Up all phases — JSON has bootstrap, sync, install, and update sections
 // ---------------------------------------------------------------------------
 
 func TestUpAllPhases(t *testing.T) {
@@ -601,13 +601,13 @@ func TestUpAllPhases(t *testing.T) {
 	existingDir := filepath.Join(base, "owner", "projects", "existing")
 	initGitRepo(t, existingDir)
 
-	// Include a repo with a dep so the deps phase has work to do.
+	// Include a repo with an update command so the update phase has work to do.
 	manifestPath := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
 owner:
   projects:
     - repo: owner/existing
-      deps:
+      update:
         - echo hello
     - repo: owner/missing
 `, base))
@@ -617,15 +617,15 @@ owner:
 	assertString(t, result, "command", "up")
 	assertKey(t, result, "exit_code")
 
-	// All three sections must be present.
+	// bootstrap, sync, and update sections must be present.
 	assertSubResult(t, result, "bootstrap")
 	assertSubResult(t, result, "sync")
-	assertSubResult(t, result, "deps")
+	assertSubResult(t, result, "update")
 }
 
 // ---------------------------------------------------------------------------
-// Test Up-2: Up dry-run — bootstrap + sync present; deps absent when no repos
-// have deps defined; exit_code 0
+// Test Up-2: Up dry-run — bootstrap + sync present; install/update nil when no repos
+// have install/update defined; exit_code 0
 // ---------------------------------------------------------------------------
 
 func TestUpDryRun(t *testing.T) {
@@ -648,21 +648,18 @@ func TestUpDryRun(t *testing.T) {
 	// bootstrap and sync must be present.
 	assertSubResult(t, result, "bootstrap")
 	assertSubResult(t, result, "sync")
-
-	// No repos in upManifest have deps defined, so deps section is absent.
-	assertNoKey(t, result, "deps")
 }
 
 // ---------------------------------------------------------------------------
-// Test Up-2b: Up dry-run with deps — deps preview present with would_run
-// commands when repos have deps defined
+// Test Up-2b: Up dry-run with install/update — preview present with would_run
+// commands when repos have install/update defined
 // ---------------------------------------------------------------------------
 
-func TestUpDryRunWithDeps(t *testing.T) {
+func TestUpDryRunWithInstallUpdate(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
-	// Create one repo on disk so its deps commands appear as would_run.
+	// Create one repo on disk so it shows as would_skip (existing) and eligible for update.
 	existingDir := filepath.Join(base, "owner", "projects", "existing")
 	initGitRepo(t, existingDir)
 
@@ -671,10 +668,10 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/existing
-      deps:
+      update:
         - echo hello
     - repo: owner/missing
-      deps:
+      install:
         - echo world
 `, base))
 
@@ -691,28 +688,29 @@ owner:
 	assertSubResult(t, result, "bootstrap")
 	assertSubResult(t, result, "sync")
 
-	// deps preview must be present.
-	depsSub := assertSubResult(t, result, "deps")
+	// install preview must be present (owner/missing would be cloned).
+	installSub := assertSubResult(t, result, "install")
 
 	// Summary should use dry-run schema: repos/commands/skipped.
-	summary, ok := depsSub["summary"].(map[string]interface{})
+	summary, ok := installSub["summary"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("deps.summary: expected object, got %T", depsSub["summary"])
+		t.Fatalf("install.summary: expected object, got %T", installSub["summary"])
 	}
 	if _, ok := summary["repos"]; !ok {
-		t.Error("deps.summary missing 'repos' key")
+		t.Error("install.summary missing 'repos' key")
 	}
 	if _, ok := summary["commands"]; !ok {
-		t.Error("deps.summary missing 'commands' key")
+		t.Error("install.summary missing 'commands' key")
 	}
 
-	// Repos array must contain at least one would_run command (for the existing repo).
-	repos, ok := depsSub["repos"].([]interface{})
-	if !ok || len(repos) == 0 {
-		t.Fatalf("deps.repos: expected non-empty array, got %v", depsSub["repos"])
+	// update preview must be present (owner/existing is pre-existing).
+	updateSub := assertSubResult(t, result, "update")
+	updRepos, ok := updateSub["repos"].([]interface{})
+	if !ok || len(updRepos) == 0 {
+		t.Fatalf("update.repos: expected non-empty array, got %v", updateSub["repos"])
 	}
 	foundWouldRun := false
-	for _, r := range repos {
+	for _, r := range updRepos {
 		repo, ok := r.(map[string]interface{})
 		if !ok {
 			continue
@@ -732,29 +730,28 @@ owner:
 		}
 	}
 	if !foundWouldRun {
-		t.Error("expected at least one command with status=would_run in deps preview")
+		t.Error("expected at least one command with status=would_run in update preview")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Test Up-3: Up no-deps — deps section omitted
+// Test Up-3: Up --no-install --no-update — install/update sections omitted
 // ---------------------------------------------------------------------------
 
-func TestUpNoDeps(t *testing.T) {
+func TestUpNoInstallNoUpdate(t *testing.T) {
 	binary := binaryForTest(t)
 	manifestPath, _ := upManifest(t)
 
-	result := runUpJSON(t, binary, manifestPath, "--no-deps")
+	result := runUpJSON(t, binary, manifestPath, "--no-install", "--no-update")
 
 	assertString(t, result, "command", "up")
 	assertSubResult(t, result, "bootstrap")
 	assertSubResult(t, result, "sync")
-	assertNoKey(t, result, "deps")
 }
 
 // ---------------------------------------------------------------------------
 // Test Up-4: Up JSON structure — top-level has command:"up",
-// bootstrap/sync/deps each has summary and repos
+// bootstrap/sync/update each has summary and repos
 // ---------------------------------------------------------------------------
 
 func TestUpJSONStructure(t *testing.T) {
@@ -769,7 +766,7 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/existing
-      deps:
+      update:
         - echo hello
 `, base))
 
@@ -778,7 +775,7 @@ owner:
 	assertString(t, result, "command", "up")
 	assertKey(t, result, "exit_code")
 
-	for _, phase := range []string{"bootstrap", "sync", "deps"} {
+	for _, phase := range []string{"bootstrap", "sync", "update"} {
 		sub := assertSubResult(t, result, phase)
 		// repos must be present (not omitted) at the full (non-compact) level.
 		assertKey(t, sub, "repos")
@@ -828,14 +825,14 @@ owner:
 
 // ---------------------------------------------------------------------------
 // Test Up-6: Up phase continuation — dirty repo causes sync skip (exit 1)
-// but deps still runs
+// but update still runs
 // ---------------------------------------------------------------------------
 
 func TestUpPhaseContinuation(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
-	// Create a dirty repo that has a dep — sync will skip it, deps should still run.
+	// Create a dirty repo that has an update command — sync will skip it, update should still run.
 	dirtyDir := filepath.Join(base, "owner", "projects", "dirty")
 	makeDirtyGitRepo(t, dirtyDir)
 
@@ -844,7 +841,7 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/dirty
-      deps:
+      update:
         - echo hello
 `, base))
 
@@ -863,8 +860,8 @@ owner:
 		t.Errorf("expected sync action=skipped for dirty repo, got %v", firstSyncRepo["action"])
 	}
 
-	// deps phase must still be present (phase continuation).
-	assertSubResult(t, result, "deps")
+	// update phase must still be present (phase continuation).
+	assertSubResult(t, result, "update")
 
 	// exit_code must be at least 1 (skipped in sync).
 	exitCode, ok := result["exit_code"].(float64)
@@ -992,7 +989,7 @@ bob:
 	}
 }
 
-func TestFilterDepsPositionalOverridesFilter(t *testing.T) {
+func TestFilterInstallPositionalOverridesFilter(t *testing.T) {
 	dir := t.TempDir()
 
 	repoPath := initGitRepo(t, filepath.Join(dir, "repos", "myrepo"))
@@ -1002,14 +999,14 @@ func TestFilterDepsPositionalOverridesFilter(t *testing.T) {
 base_dir: %s/repos
 me:
   - repo: me/myrepo
-    deps:
+    install:
       - echo hello
 `, dir))
 
 	binary := filepath.Join(testBinaryDir, "rp")
 
-	// Run deps with both --filter and a positional arg.
-	args := []string{"--json", "--manifest", manifest, "--filter", "nonexistent/", "deps", "me/myrepo"}
+	// Run install with both --filter and a positional arg.
+	args := []string{"--json", "--manifest", manifest, "--filter", "nonexistent/", "install", "me/myrepo"}
 	cmd := exec.Command(binary, args...)
 	var stderrBuf strings.Builder
 	cmd.Stderr = &stderrBuf
@@ -1025,8 +1022,8 @@ me:
 	}
 
 	// Should have processed the repo (positional wins).
-	if result["command"] != "deps" {
-		t.Errorf("expected command=deps, got %v", result["command"])
+	if result["command"] != "install" {
+		t.Errorf("expected command=install, got %v", result["command"])
 	}
 
 	// Stderr should contain a warning about --filter being ignored.
@@ -1037,12 +1034,12 @@ me:
 }
 
 // ---------------------------------------------------------------------------
-// 7.1 deps --dry-run Tests
+// 7.1 install --dry-run Tests
 // ---------------------------------------------------------------------------
 
-// TestDepsDryRunListsCommands: manifest with deps, --dry-run --json →
+// TestInstallDryRunListsCommands: manifest with install, --dry-run --json →
 // dry_run:true, status:would_run per command, exit 0.
-func TestDepsDryRunListsCommands(t *testing.T) {
+func TestInstallDryRunListsCommands(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
@@ -1054,14 +1051,14 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/myrepo
-      deps:
+      install:
         - echo hello
         - echo world
 `, base))
 
-	result := runRPJSON(t, binary, manifest, "deps", "--dry-run")
+	result := runRPJSON(t, binary, manifest, "install", "--dry-run")
 
-	assertString(t, result, "command", "deps")
+	assertString(t, result, "command", "install")
 	assertFloat(t, result, "exit_code", 0)
 
 	dryRun, ok := result["dry_run"].(bool)
@@ -1091,9 +1088,9 @@ owner:
 	}
 }
 
-// TestDepsDryRunSkipsMissing: repo not on disk with deps →
+// TestInstallDryRunSkipsMissing: repo not on disk with install →
 // status:skipped, reason:not_on_disk.
-func TestDepsDryRunSkipsMissing(t *testing.T) {
+func TestInstallDryRunSkipsMissing(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
@@ -1103,13 +1100,13 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/missing
-      deps:
+      install:
         - echo hello
 `, base))
 
-	result := runRPJSON(t, binary, manifest, "deps", "--dry-run")
+	result := runRPJSON(t, binary, manifest, "install", "--dry-run")
 
-	assertString(t, result, "command", "deps")
+	assertString(t, result, "command", "install")
 	assertFloat(t, result, "exit_code", 0)
 
 	dryRun, ok := result["dry_run"].(bool)
@@ -1127,8 +1124,8 @@ owner:
 	assertString(t, repo, "reason", "not_on_disk")
 }
 
-// TestUpDryRunIncludesDeps: rp up --dry-run --json → deps key present (not nil).
-func TestUpDryRunIncludesDeps(t *testing.T) {
+// TestUpDryRunIncludesUpdate: rp up --dry-run --json → update key present (not nil).
+func TestUpDryRunIncludesUpdate(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
@@ -1140,7 +1137,7 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/existing
-      deps:
+      update:
         - echo hello
 `, base))
 
@@ -1153,8 +1150,8 @@ owner:
 		t.Fatalf("expected dry_run:true, got %v", result["dry_run"])
 	}
 
-	// deps key must be present (spec v0.2.0 §2.3 — breaking change).
-	assertSubResult(t, result, "deps")
+	// update key must be present for pre-existing repos with update commands.
+	assertSubResult(t, result, "update")
 }
 
 // ---------------------------------------------------------------------------
@@ -1543,39 +1540,39 @@ owner:
 }
 
 // ---------------------------------------------------------------------------
-// Test 1 (new): deps --dry-run positional with no deps → "no deps configured",
+// Test 1 (new): install --dry-run positional with no install → "no install commands configured",
 // exit 0
 // ---------------------------------------------------------------------------
 
-// TestDepsDryRunPositionalNoDeps: manifest with a repo that has NO deps.
-// Running `deps --dry-run --json reponame` should exit 0 and return an empty
-// repos array (the "no deps configured" fast path).
-func TestDepsDryRunPositionalNoDeps(t *testing.T) {
+// TestInstallDryRunPositionalNoInstall: manifest with a repo that has NO install.
+// Running `install --dry-run --json reponame` should exit 0 and return an empty
+// repos array (the "no install commands configured" fast path).
+func TestInstallDryRunPositionalNoInstall(t *testing.T) {
 	binary := binaryForTest(t)
 	base := t.TempDir()
 
-	repoDir := filepath.Join(base, "owner", "projects", "nodeps")
+	repoDir := filepath.Join(base, "owner", "projects", "noinstall")
 	initGitRepo(t, repoDir)
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
 base_dir: %s
 owner:
   projects:
-    - repo: owner/nodeps
+    - repo: owner/noinstall
 `, base))
 
-	result := runRPJSON(t, binary, manifest, "deps", "--dry-run", "owner/nodeps")
+	result := runRPJSON(t, binary, manifest, "install", "--dry-run", "owner/noinstall")
 
-	assertString(t, result, "command", "deps")
+	assertString(t, result, "command", "install")
 	assertFloat(t, result, "exit_code", 0)
 
-	// repos array must be empty (no deps to report).
+	// repos array must be empty (no install commands to report).
 	repos, ok := result["repos"].([]interface{})
 	if !ok {
 		t.Fatalf("expected repos array, got %T (%v)", result["repos"], result["repos"])
 	}
 	if len(repos) != 0 {
-		t.Errorf("expected empty repos array for no-deps repo, got %d entries", len(repos))
+		t.Errorf("expected empty repos array for no-install repo, got %d entries", len(repos))
 	}
 }
 
@@ -1857,13 +1854,13 @@ owner:
 // hint field explaining the problem.
 
 // ---------------------------------------------------------------------------
-// Test 8 (new): list --json with deps: [""] (empty string dep) → hint present
+// Test 8 (new): list --json with install: [""] (empty string) → hint present
 // ---------------------------------------------------------------------------
 
-// TestHintEmptyDeps: manifest with deps: [""] (an empty string in the deps
+// TestHintEmptyInstall: manifest with install: [""] (an empty string in the install
 // list). Running `list --json` should fail manifest validation and return a
 // non-empty hint field explaining the problem.
-func TestHintEmptyDeps(t *testing.T) {
+func TestHintEmptyInstall(t *testing.T) {
 	binary := binaryForTest(t)
 
 	dir := t.TempDir()
@@ -1872,7 +1869,7 @@ base_dir: %s
 owner:
   projects:
     - repo: owner/myrepo
-      deps:
+      install:
         - ""
 `, dir))
 
@@ -1882,7 +1879,7 @@ owner:
 
 	hint, ok := result["hint"].(string)
 	if !ok || hint == "" {
-		t.Fatalf("expected non-empty hint field for empty-deps manifest, got %v", result["hint"])
+		t.Fatalf("expected non-empty hint field for empty-install manifest, got %v", result["hint"])
 	}
 }
 
@@ -2217,5 +2214,353 @@ owners:
 	}
 	if !strings.Contains(hintVal, "dedent owner blocks by one level") {
 		t.Errorf("hint should contain dedent instruction, got: %q", hintVal)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// QA Regression Tests (v0.6.0 spec §4.4)
+// ---------------------------------------------------------------------------
+
+// Q1: Manifest with "deps:" key must be rejected with migration hint.
+func TestQA_DepsKeyRejectedJSON(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+
+	manifest := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/myrepo
+      deps:
+        - echo hello
+`, dir))
+
+	result := runRPJSON(t, binary, manifest, "status")
+
+	assertFloat(t, result, "exit_code", 2)
+
+	errVal, ok := result["error"].(string)
+	if !ok || errVal == "" {
+		t.Fatalf("expected non-empty error field, got %v", result["error"])
+	}
+	if !strings.Contains(errVal, `removed key "deps"`) {
+		t.Errorf("error should contain removed key message, got: %q", errVal)
+	}
+
+	hintVal, ok := result["hint"].(string)
+	if !ok || hintVal == "" {
+		t.Fatalf("expected non-empty hint field, got %v", result["hint"])
+	}
+	if !strings.Contains(hintVal, `Rename "deps:" to "install:"`) {
+		t.Errorf("hint should contain rename instruction, got: %q", hintVal)
+	}
+}
+
+// Q2: "rp install --json" runs install commands on an existing repo.
+func TestQA_InstallStandalone(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "myrepo")
+	initGitRepo(t, repoDir)
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/myrepo
+      install:
+        - echo hello
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "install")
+
+	assertString(t, result, "command", "install")
+	assertFloat(t, result, "exit_code", 0)
+
+	summary, ok := result["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary object, got %T", result["summary"])
+	}
+	succeeded, ok := summary["succeeded"].(float64)
+	if !ok || succeeded != 1 {
+		t.Errorf("expected summary.succeeded=1, got %v", summary["succeeded"])
+	}
+}
+
+// Q3: "rp update --json" on a repo without update: commands.
+func TestQA_UpdateSkipsNoUpdate(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "myrepo")
+	initGitRepo(t, repoDir)
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/myrepo
+      install:
+        - echo hello
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "update")
+
+	assertString(t, result, "command", "update")
+	assertFloat(t, result, "exit_code", 0)
+
+	repos, ok := result["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected repos array, got %T", result["repos"])
+	}
+	if len(repos) != 0 {
+		t.Errorf("expected empty repos array (no update commands), got %d entries", len(repos))
+	}
+}
+
+// Q4: "rp up --json" clones a repo and runs install (not update) on it.
+func TestQA_UpInstallNewClone(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	// Create a bare repo to clone from.
+	bareDir := t.TempDir()
+	run := func(dir string, args ...string) {
+		t.Helper()
+		c := exec.Command(args[0], args[1:]...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	run(bareDir, "git", "init", "--bare", bareDir)
+	// Seed the bare repo with an initial commit.
+	seedClone := filepath.Join(t.TempDir(), "seed")
+	run(t.TempDir(), "git", "clone", bareDir, seedClone)
+	run(seedClone, "git", "config", "user.email", "test@test.com")
+	run(seedClone, "git", "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(seedClone, "seed.txt"), []byte("seed"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	run(seedClone, "git", "add", ".")
+	run(seedClone, "git", "commit", "-m", "seed commit")
+	run(seedClone, "git", "push")
+
+	// Write a temporary gitconfig that redirects the SSH clone URL to our local bare repo.
+	gitConfigDir := t.TempDir()
+	gitConfigPath := filepath.Join(gitConfigDir, ".gitconfig")
+	repoName := "owner/cloneme"
+	gitConfigContent := fmt.Sprintf("[url %q]\n\tinsteadOf = git@github.com:%s.git\n", bareDir, repoName)
+	if err := os.WriteFile(gitConfigPath, []byte(gitConfigContent), 0644); err != nil {
+		t.Fatalf("write gitconfig: %v", err)
+	}
+
+	cloneDir := filepath.Join(base, "owner", "projects", "cloneme")
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/cloneme
+      install:
+        - echo installed
+      update:
+        - echo updated
+`, base))
+
+	// Run rp up --json with the custom gitconfig.
+	args := []string{"--json", "--manifest", manifest, "up"}
+	cmd := exec.Command(binary, args...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+gitConfigPath)
+	out, _ := cmd.Output()
+	if len(out) == 0 {
+		cmd2 := exec.Command(binary, args...)
+		cmd2.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+gitConfigPath)
+		combined, _ := cmd2.CombinedOutput()
+		t.Fatalf("empty output from binary\ncombined: %s", combined)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON from binary: %v\nraw: %s", err, out)
+	}
+
+	assertString(t, result, "command", "up")
+
+	// Verify the clone succeeded (repo dir should exist).
+	if _, err := os.Stat(cloneDir); os.IsNotExist(err) {
+		t.Fatalf("clone directory %q does not exist — bootstrap failed", cloneDir)
+	}
+
+	// install.repos must contain the repo (newly cloned).
+	installSub, ok := result["install"].(map[string]interface{})
+	if !ok || installSub == nil {
+		t.Fatalf("expected install sub-result, got %v", result["install"])
+	}
+	installRepos, ok := installSub["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected install.repos array, got %T", installSub["repos"])
+	}
+	found := false
+	for _, r := range installRepos {
+		repo, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if repo["repo"] == repoName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected install.repos to contain %q (newly cloned), got %v", repoName, installRepos)
+	}
+
+	// update.repos must NOT contain the repo (it was newly cloned).
+	updateSub, ok := result["update"].(map[string]interface{})
+	if !ok || updateSub == nil {
+		// update being null is also acceptable — repo was cloned, not pre-existing.
+		return
+	}
+	updateRepos, ok := updateSub["repos"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, r := range updateRepos {
+		repo, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if repo["repo"] == repoName {
+			t.Errorf("update.repos should NOT contain %q (newly cloned), but it does", repoName)
+		}
+	}
+}
+
+// Q5: "rp up --json" on existing repo runs update (not install).
+func TestQA_UpUpdateExisting(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	repoDir := filepath.Join(base, "owner", "projects", "existing")
+	initGitRepo(t, repoDir)
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/existing
+      install:
+        - echo installed
+      update:
+        - echo updated
+`, base))
+
+	result := runUpJSON(t, binary, manifest)
+
+	assertString(t, result, "command", "up")
+
+	// update.repos must contain the repo (pre-existing).
+	updateSub, ok := result["update"].(map[string]interface{})
+	if !ok || updateSub == nil {
+		t.Fatalf("expected update sub-result, got %v", result["update"])
+	}
+	updateRepos, ok := updateSub["repos"].([]interface{})
+	if !ok {
+		t.Fatalf("expected update.repos array, got %T", updateSub["repos"])
+	}
+	foundUpdate := false
+	for _, r := range updateRepos {
+		repo, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if repo["repo"] == "owner/existing" {
+			foundUpdate = true
+			break
+		}
+	}
+	if !foundUpdate {
+		t.Errorf("expected update.repos to contain %q (pre-existing), got %v", "owner/existing", updateRepos)
+	}
+
+	// install.repos must NOT contain the repo (it was pre-existing, not newly cloned).
+	installRaw := result["install"]
+	if installRaw == nil {
+		// install being null is acceptable — no newly cloned repos.
+		return
+	}
+	installSub, ok := installRaw.(map[string]interface{})
+	if !ok {
+		return
+	}
+	installRepos, ok := installSub["repos"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, r := range installRepos {
+		repo, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if repo["repo"] == "owner/existing" {
+			t.Errorf("install.repos should NOT contain %q (pre-existing), but it does", "owner/existing")
+		}
+	}
+}
+
+// Q6: "rp up --json --no-install --no-update" produces null install/update.
+func TestQA_UpNoInstallNoUpdate(t *testing.T) {
+	binary := binaryForTest(t)
+	manifestPath, _ := upManifest(t)
+
+	result := runUpJSON(t, binary, manifestPath, "--no-install", "--no-update")
+
+	assertString(t, result, "command", "up")
+
+	// install key must be present but null.
+	installVal, installPresent := result["install"]
+	if !installPresent {
+		t.Fatal("expected 'install' key to be present in JSON output")
+	}
+	if installVal != nil {
+		t.Errorf("expected install to be null, got %v", installVal)
+	}
+
+	// update key must be present but null.
+	updateVal, updatePresent := result["update"]
+	if !updatePresent {
+		t.Fatal("expected 'update' key to be present in JSON output")
+	}
+	if updateVal != nil {
+		t.Errorf("expected update to be null, got %v", updateVal)
+	}
+}
+
+// Q7: "rp deps" migration stub prints error and exits 2.
+func TestQA_DepsCmdMigration(t *testing.T) {
+	binary := binaryForTest(t)
+
+	cmd := exec.Command(binary, "deps")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("unexpected error running rp deps: %v", err)
+		}
+	}
+
+	if exitCode != 2 {
+		t.Errorf("expected exit code 2, got %d", exitCode)
+	}
+
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, `replaced by "rp install" and "rp update"`) {
+		t.Errorf("stderr should contain migration message, got: %q", stderrStr)
 	}
 }
