@@ -43,10 +43,11 @@ go build ./... && go test ./... && go vet ./...
 rp bootstrap              # Clone missing repos
 rp sync                   # Pull clean repos, skip dirty
 rp status                 # Show state of all repos
-rp deps [repo]            # Run dep install commands from manifest
+rp install [repo]         # Run install commands from manifest
+rp update [repo]          # Run update commands from manifest
 rp list                   # List all repos
 rp manifest init          # Scan dirs, generate manifest
-rp up                     # Bootstrap + sync + deps in one call
+rp up                     # Bootstrap + sync + install + update in one call
 rp check                  # Boolean exit code (0=ok, 1=attention, 2=error)
 rp diff                   # Show latest commit per repo
 rp discover               # Find GitHub repos not in manifest (requires gh)
@@ -67,10 +68,11 @@ rp discover               # Find GitHub repos not in manifest (requires gh)
 bootstrap --dry-run
 sync --dry-run
 status --dirty --ahead --behind
-deps [repo] --dry-run
+install [repo] --dry-run
+update [repo] --dry-run
 list --missing
 manifest init --dir <path> --output <path> --dry-run
-up --dry-run --no-deps
+up --dry-run --no-install --no-update
 check                             # no flags except --filter
 diff --since <Nd|Nh>
 discover --forks --archived
@@ -81,10 +83,11 @@ discover --forks --archived
 - **bootstrap**: Clone missing repos via SSH (`git@github.com:{repo}.git`). Skip already-cloned. `--dry-run` previews.
 - **sync**: Per-repo evaluation order: not cloned → skip, not git → error, dirty → skip, unpushed → skip, clean → `git pull --ff-only`.
 - **status**: Reports per-repo: branch, dirty file count, ahead/behind counts, upstream presence. Flags filter output.
-- **deps**: Runs `deps:` commands via `sh -c` in each repo's directory. Skips repos without deps. Positional arg overrides `--filter`.
+- **install**: Runs `install:` commands via `sh -c` in each repo's directory. Skips repos without install commands. Positional arg overrides `--filter`.
+- **update**: Runs `update:` commands via `sh -c` in each repo's directory. Skips repos without update commands. Positional arg overrides `--filter`.
 - **list**: Shows all repos grouped by owner/category. `--missing` shows only uncloned.
 - **manifest init**: Scans a directory tree, discovers git repos with GitHub remotes, infers flat (depth-1) vs categorized (depth-2) layout, generates YAML.
-- **up**: Runs bootstrap → sync → deps in sequence. `--no-deps` skips the deps phase. JSON output wraps all three as sub-results.
+- **up**: Runs bootstrap → sync → install → update in sequence. `--no-install` skips the install phase. `--no-update` skips the update phase. JSON output wraps all four as sub-results.
 - **diff**: Shows latest commit (sha, message, date, days_ago) per repo. `--since` filters by recency.
 - **discover**: Lists GitHub repos not in manifest. Requires `gh` CLI. Scans personal account + all member orgs. `--forks` includes forks, `--archived` includes archived. Exit 0 = all tracked, exit 1 = untracked found.
 
@@ -96,10 +99,11 @@ cmd/                      Cobra commands
   bootstrap.go            Clone missing repos (human + JSON paths)
   sync.go                 Pull clean repos (human + JSON paths)
   status.go               Repo state report (human + JSON paths)
-  deps.go                 Run dep commands (human + JSON paths)
+  install.go              Run install commands (human + JSON paths)
+  update.go               Run update commands (human + JSON paths)
   list.go                 Repo listing (human + JSON paths)
   manifest_init.go        Dir scan + manifest generation
-  up.go                   Composite bootstrap+sync+deps
+  up.go                   Composite bootstrap+sync+install+update
   check.go                Boolean exit code, zero output
   diff.go                 Latest commit per repo, --since filter
   discover.go             Find untracked GitHub repos (requires gh CLI)
@@ -114,9 +118,9 @@ internal/
   git/
     git.go                Clone, Pull, Status, LastCommitDate, IsRepo
     git_test.go           Unit tests (use real temp repos)
-  deps/
-    deps.go               RunDeps via sh -c
-    deps_test.go          Unit tests
+  runner/
+    runner.go             RunCommands via sh -c
+    runner_test.go        Unit tests
   output/
     output.go             SuccessResult, ErrorResult, UpResult, HintError, PrintAndExit
     output_test.go        Unit tests
@@ -160,11 +164,15 @@ base_dir: ~/Developer
 acme:                              # mapping → categorized
   services:
     - repo: acme/api
-      deps:
+      install:
+        - go mod download
+      update:
         - go mod download
     - repo: acme/web
-      deps:
+      install:
         - npm install
+      update:
+        - npm update
 opensource:                        # sequence → flat
   - repo: opensource/design-system
   - repo: opensource/tools
@@ -182,11 +190,11 @@ opensource:                        # sequence → flat
 4. Owner and category names must be valid directory names (no `/`, `..`, null bytes)
 5. At least one owner with at least one repo (top-level keys beyond `base_dir`)
 6. Categories must contain a non-empty repo list
-7. `deps` entries must be non-empty strings
+7. `install` and `update` entries must be non-empty strings
 8. No duplicate top-level keys
 
 ### Key Data Structures
-- **RepoEntry**: Repo, Owner, Category (empty for flat), LocalPath, CloneURL, Deps
+- **RepoEntry**: Repo, Owner, Category (empty for flat), LocalPath, CloneURL, Install, Update
 - **OwnerGroup**: Name, IsFlat (derived from YAML node type), Repos
 - **Manifest**: BaseDir, owners (private, accessed via Repos()/Owners())
 
@@ -206,7 +214,7 @@ Every command supports `--json`. Two result types:
 
 **Composite (rp up):**
 ```json
-{"command": "up", "exit_code": 0, "bootstrap": {...}, "sync": {...}, "deps": {...}}
+{"command": "up", "exit_code": 0, "bootstrap": {...}, "sync": {...}, "install": {...}, "update": {...}}
 ```
 
 ## Environment Variables
@@ -223,9 +231,9 @@ Every command supports `--json`. Two result types:
 Tests across 6 test files:
 - `internal/manifest`: parsing/validation + filter tests
 - `internal/git`: git operation tests (use temp repos)
-- `internal/deps`: command execution tests
+- `internal/runner`: command execution tests
 - `internal/output`: JSON serialization tests
-- `cmd/json_test.go`: end-to-end integration tests (subprocess: JSON output, check, diff, deps dry-run, sync errors, hints, discover, QA regressions)
+- `cmd/json_test.go`: end-to-end integration tests (subprocess: JSON output, check, diff, install dry-run, update dry-run, sync errors, hints, discover, QA regressions)
 - `cmd/discover_test.go`: unit tests for filterUntracked and matchesDiscoverFilter
 
 Git tests create real temp repos with `git init`, commits, and bare repos for clone/pull testing. Integration tests build the binary and run it as a subprocess.

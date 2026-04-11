@@ -58,25 +58,34 @@ base_dir: ~/Developer
 acme:                              # mapping → categorized
   services:
     - repo: acme/api
-      deps:
+      install:
+        - go mod download
+      update:
         - go mod download
     - repo: acme/web
-      deps:
+      install:
         - npm install
+      update:
+        - npm update
   libraries:
     - repo: acme/shared-utils
 
 opensource:                        # sequence → flat
   - repo: opensource/design-system
   - repo: opensource/cli-tools
-    deps:
+    install:
       - cargo build
+    update:
+      - cargo update
 
 vendor:                            # sequence → flat
   - repo: vendor/payments
-    deps:
+    install:
       - composer install
       - npm install
+    update:
+      - composer update
+      - npm update
 ```
 
 ### Directory mapping
@@ -130,28 +139,29 @@ opensource
 
 -- Summary --
 3 OK, 2 need attention, 1 not cloned
-```
+### rp install
+
+Run install commands defined in the manifest.
 
 ```bash
-rp status                 # all repos
-rp status --dirty         # only dirty repos
-rp status --ahead         # only repos with unpushed commits
-rp status --behind        # only repos behind remote
+rp install                        # all repos with install commands
+rp install vendor/payments        # specific repo
+rp install --dry-run              # preview what would run
 ```
 
-### rp deps
+Commands are defined per repo in the manifest (`install:` field) and run via `sh -c`.
 
-Run dependency install commands defined in the manifest.
+### rp update
+
+Run update commands defined in the manifest.
 
 ```bash
-rp deps                          # all repos with deps
-rp deps vendor/payments          # specific repo
-rp deps --dry-run                # preview what would run
+rp update                         # all repos with update commands
+rp update vendor/payments         # specific repo
+rp update --dry-run               # preview what would run
 ```
 
-Commands are defined per repo in the manifest (`deps:` field) and run via `sh -c`.
-
-
+Commands are defined per repo in the manifest (`update:` field) and run via `sh -c`.
 
 ### rp list
 
@@ -174,12 +184,13 @@ rp manifest init --dry-run       # preview discovered repos
 
 ### rp up
 
-Bootstrap + sync + deps in one command.
+Bootstrap + sync + install + update in one command.
 
 ```bash
-rp up                     # clone, pull, install deps
-rp up --dry-run           # preview all three phases
-rp up --no-deps           # skip dep installation
+rp up                     # clone, pull, install, update
+rp up --dry-run           # preview all four phases
+rp up --no-install        # skip install phase
+rp up --no-update         # skip update phase
 ```
 
 ### rp check
