@@ -1,4 +1,4 @@
-package deps
+package runner
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-func RunDeps(path string, commands []string) error {
+func RunCommands(path string, commands []string) error {
 	if len(commands) == 0 {
 		return nil
 	}

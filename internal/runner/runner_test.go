@@ -1,4 +1,4 @@
-package deps
+package runner
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 // Test 1: Run single command successfully
 func TestRunDeps_SingleCommand(t *testing.T) {
 	dir := t.TempDir()
-	err := RunDeps(dir, []string{"echo hello"})
+	err := RunCommands(dir, []string{"echo hello"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestRunDeps_SingleCommand(t *testing.T) {
 // Test 2: Run multiple commands in order
 func TestRunDeps_MultipleCommands(t *testing.T) {
 	dir := t.TempDir()
-	err := RunDeps(dir, []string{"echo a", "echo b"})
+	err := RunCommands(dir, []string{"echo a", "echo b"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestRunDeps_MultipleCommands(t *testing.T) {
 // Test 3: Empty command list is a no-op
 func TestRunDeps_EmptyCommands(t *testing.T) {
 	dir := t.TempDir()
-	err := RunDeps(dir, []string{})
+	err := RunCommands(dir, []string{})
 	if err != nil {
 		t.Fatalf("expected no error for empty commands, got: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRunDeps_EmptyCommands(t *testing.T) {
 // Test 4: Failing command returns error containing the command name
 func TestRunDeps_FailingCommand(t *testing.T) {
 	dir := t.TempDir()
-	err := RunDeps(dir, []string{"false"})
+	err := RunCommands(dir, []string{"false"})
 	if err == nil {
 		t.Fatal("expected error from failing command, got nil")
 	}
@@ -51,7 +51,7 @@ func TestRunDeps_RunsInRepoDir(t *testing.T) {
 	dir := t.TempDir()
 	markerFile := filepath.Join(dir, "marker.txt")
 
-	err := RunDeps(dir, []string{"pwd > marker.txt"})
+	err := RunCommands(dir, []string{"pwd > marker.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRunDeps_RunsInRepoDir(t *testing.T) {
 // Test 6: Shell features work (pipes, env vars)
 func TestRunDeps_ShellFeaturesWork(t *testing.T) {
 	dir := t.TempDir()
-	err := RunDeps(dir, []string{"echo $HOME | cat"})
+	err := RunCommands(dir, []string{"echo $HOME | cat"})
 	if err != nil {
 		t.Fatalf("expected no error with shell features, got: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRunDeps_StopsOnFirstFailure(t *testing.T) {
 	dir := t.TempDir()
 	shouldNotExist := filepath.Join(dir, "should_not_exist")
 
-	err := RunDeps(dir, []string{"false", "touch should_not_exist"})
+	err := RunCommands(dir, []string{"false", "touch should_not_exist"})
 	if err == nil {
 		t.Fatal("expected error from failing command, got nil")
 	}
