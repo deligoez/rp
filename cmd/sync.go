@@ -113,47 +113,39 @@ func runSync(cmd *cobra.Command, args []string) error {
 		repos = manifest.FilterRepos(repos, Filters)
 	}
 
-	opts := worker.PoolOptions{Verb: "syncing"}
-	results := worker.PoolWithProgress(repos, Concurrency, opts, func(entry manifest.RepoEntry) (syncResult, error) {
-		label := repoLabel(entry)
-		return processSyncRepo(entry, label, syncDryRun), nil
-	})
-
-	// JSON output path.
+	// JSON path: preserve legacy ordered output (no live log).
 	if output.IsJSON() {
+		opts := worker.PoolOptions{Verb: "syncing"}
+		results := worker.PoolWithProgress(repos, Concurrency, opts, func(entry manifest.RepoEntry) (syncResult, error) {
+			label := repoLabel(entry)
+			return processSyncRepo(entry, label, syncDryRun), nil
+		})
 		return buildAndPrintSyncJSON(results, repos, syncDryRun)
 	}
 
-	// Human output: print results grouped by owner in manifest order.
-	// Use filtered owners so the pos counter stays aligned with results.
-	// worker.PoolWithProgress preserves input order so results[i] corresponds to repos[i].
-	owners := manifest.FilterOwners(m.Owners(), Filters)
-	pos := 0
-	for _, owner := range owners {
-		fmt.Println(owner.Name)
-		for range owner.Repos {
-			if pos >= len(results) {
-				break
-			}
-			r := results[pos].Value
-			fmt.Printf("  %-30s %s\n", r.label, r.status)
-			pos++
-		}
-		fmt.Println()
-	}
-
-	// Compute summary counts.
+	// Human path: stream per-repo lines as each worker finishes.
 	highestExit := 0
 	needAttention := 0
-	for _, r := range results {
-		if r.Value.exitCode > highestExit {
-			highestExit = r.Value.exitCode
-		}
-		if r.Value.exitCode > 0 {
-			needAttention++
-		}
-	}
 
+	_ = worker.PoolWithLiveLog(
+		repos,
+		Concurrency,
+		func(entry manifest.RepoEntry) (syncResult, error) {
+			label := repoLabel(entry)
+			return processSyncRepo(entry, label, syncDryRun), nil
+		},
+		func(n, total int, _ manifest.RepoEntry, r syncResult, _ error) {
+			fmt.Printf("[%d/%d] %s  %s\n", n, total, ui.PadRight(r.label, 24), r.status)
+			if r.exitCode > highestExit {
+				highestExit = r.exitCode
+			}
+			if r.exitCode > 0 {
+				needAttention++
+			}
+		},
+	)
+
+	fmt.Println()
 	fmt.Printf("-- Summary --\n%s synced, %d need attention\n",
 		ui.Plural(len(repos), "repo"),
 		needAttention,

@@ -227,49 +227,41 @@ var updateCmd = &cobra.Command{
 			return nil
 		}
 
-		// Run update for each target repo via worker pool.
-		opts := worker.PoolOptions{Verb: "updating"}
-		results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (updateRepoResult, error) {
-			result := updateRepoResult{entry: entry}
-
-			// Check if repo exists on disk.
-			if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-				result.skipped = true
-				result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-				return result, nil
-			}
-
-			// Run each update command sequentially, stopping on first failure.
-			for _, command := range entry.Update {
-				err := runner.RunCommands(entry.LocalPath, []string{command})
-				cr := updateCommandResult{command: command}
-				if err != nil {
-					cr.failed = true
-					cr.errMsg = err.Error()
-					result.results = append(result.results, cr)
-					// Stop on first failure per spec.
-					break
-				}
-				result.results = append(result.results, cr)
-			}
-
-			return result, nil
-		})
-
-		// Build a map from repo -> result for ordered display.
-		resultMap := make(map[string]updateRepoResult, len(results))
-		for _, r := range results {
-			resultMap[r.Value.entry.Repo] = r.Value
-		}
-
 		succeeded := 0
 		failed := 0
 		skipped := 0
 		totalCommands := 0
 		anyFailed := false
 
-		// JSON output path.
+		// JSON path: preserve ordered results (no live log).
 		if output.IsJSON() {
+			opts := worker.PoolOptions{Verb: "updating"}
+			results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (updateRepoResult, error) {
+				result := updateRepoResult{entry: entry}
+				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+					result.skipped = true
+					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
+					return result, nil
+				}
+				for _, command := range entry.Update {
+					err := runner.RunCommands(entry.LocalPath, []string{command})
+					cr := updateCommandResult{command: command}
+					if err != nil {
+						cr.failed = true
+						cr.errMsg = err.Error()
+						result.results = append(result.results, cr)
+						break
+					}
+					result.results = append(result.results, cr)
+				}
+				return result, nil
+			})
+
+			resultMap := make(map[string]updateRepoResult, len(results))
+			for _, r := range results {
+				resultMap[r.Value.entry.Repo] = r.Value
+			}
+
 			type jsonCommandEntry struct {
 				Command string `json:"command"`
 				Status  string `json:"status"`
@@ -353,59 +345,63 @@ var updateCmd = &cobra.Command{
 			})
 		}
 
-		// Human output path.
-		for _, ownerGroup := range m.Owners() {
-			// Print repos in this owner that are in our targets, preserving manifest order.
-			ownerPrinted := false
+		// Human path: stream per-repo lines as each worker finishes.
+		fmt.Printf("Updating %s (concurrency: %d)...\n\n",
+			ui.Plural(len(targets), "repo"), Concurrency)
 
-			for _, entry := range ownerGroup.Repos {
-				res, ok := resultMap[entry.Repo]
-				if !ok {
-					continue
+		_ = worker.PoolWithLiveLog(
+			targets,
+			Concurrency,
+			func(entry manifest.RepoEntry) (updateRepoResult, error) {
+				result := updateRepoResult{entry: entry}
+				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+					result.skipped = true
+					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
+					return result, nil
 				}
-
-				label := repoLabel(entry)
-				paddedLabel := ui.PadRight(label, 24)
-
-				if !ownerPrinted {
-					fmt.Println(ownerGroup.Name)
-					ownerPrinted = true
+				for _, command := range entry.Update {
+					err := runner.RunCommands(entry.LocalPath, []string{command})
+					cr := updateCommandResult{command: command}
+					if err != nil {
+						cr.failed = true
+						cr.errMsg = err.Error()
+						result.results = append(result.results, cr)
+						break
+					}
+					result.results = append(result.results, cr)
 				}
-
+				return result, nil
+			},
+			func(n, total int, entry manifest.RepoEntry, res updateRepoResult, _ error) {
+				label := ui.PadRight(repoLabel(entry), 24)
 				if res.skipped {
-					fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
 					skipped++
-					continue
+					fmt.Printf("[%d/%d] -- skipped    %s (not on disk)\n", n, total, label)
+					return
 				}
-
-				// Print a line per command result.
 				repoFailed := false
+				var failedCmd updateCommandResult
 				for _, cr := range res.results {
 					totalCommands++
 					if cr.failed {
-						fmt.Printf("  %s FAILED: %s (%s)\n",
-							paddedLabel,
-							cr.command,
-							cr.errMsg,
-						)
 						repoFailed = true
-						anyFailed = true
-					} else {
-						fmt.Printf("  %s %s %s\n",
-							paddedLabel,
-							ui.SymbolOK(),
-							cr.command,
-						)
+						failedCmd = cr
 					}
 				}
-
 				if repoFailed {
 					failed++
-				} else if len(res.results) > 0 {
-					succeeded++
+					anyFailed = true
+					fmt.Printf("[%d/%d] %s FAILED     %s: %s (%s)\n",
+						n, total, ui.SymbolError(), label, failedCmd.command, failedCmd.errMsg)
+					return
 				}
-			}
-		}
+				if len(res.results) > 0 {
+					succeeded++
+					fmt.Printf("[%d/%d] %s updated    %s (%s)\n",
+						n, total, ui.SymbolOK(), label, ui.Plural(len(res.results), "command"))
+				}
+			},
+		)
 
 		// Summary line.
 		fmt.Println()

@@ -100,44 +100,32 @@ var bootstrapCmd = &cobra.Command{
 		fmt.Printf("Bootstrapping %s (concurrency: %d)...\n\n",
 			ui.Plural(len(repos), "repo"), Concurrency)
 
-		// 2. Run clones in parallel via worker pool.
-		results := worker.PoolWithProgress(
+		var cloned, existed, failed int
+
+		// 2. Run clones in parallel via worker pool, streaming per-repo lines.
+		_ = worker.PoolWithLiveLog(
 			repos,
 			Concurrency,
-			worker.PoolOptions{Verb: "cloning"},
 			func(entry manifest.RepoEntry) (bootstrapResult, error) {
 				return processBootstrapEntry(entry), nil
 			},
-		)
-
-		// Build a lookup from repo path (LocalPath) to result for ordered display.
-		resultMap := make(map[string]bootstrapResult, len(results))
-		for _, r := range results {
-			resultMap[r.Value.Entry.LocalPath] = r.Value
-		}
-
-		// 3. Print output grouped by owner in manifest order.
-		var cloned, existed, failed int
-		for _, ownerGroup := range manifest.FilterOwners(m.Owners(), Filters) {
-			fmt.Println(ownerGroup.Name)
-			for _, entry := range ownerGroup.Repos {
-				res := resultMap[entry.LocalPath]
-				label := repoLabel(entry)
+			func(n, total int, entry manifest.RepoEntry, res bootstrapResult, _ error) {
+				label := ui.PadRight(repoLabel(entry), 24)
 				switch res.Status {
 				case bsCloned:
 					cloned++
-					fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), ui.SymbolOK()+" cloned")
+					fmt.Printf("[%d/%d] %s cloned     %s\n", n, total, ui.SymbolOK(), label)
 				case bsAlreadyExists:
 					existed++
-					fmt.Printf("  %s  already exists\n", ui.PadRight(label, 24))
+					fmt.Printf("[%d/%d] -- exists     %s\n", n, total, label)
 				case bsFailed:
 					failed++
-					fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), ui.SymbolError()+" FAILED: "+res.ErrMsg)
+					fmt.Printf("[%d/%d] %s FAILED     %s: %s\n", n, total, ui.SymbolError(), label, res.ErrMsg)
 				}
-			}
-		}
+			},
+		)
 
-		// 4. Summary.
+		// 3. Summary.
 		fmt.Println()
 		fmt.Println(ui.SummaryLine(fmt.Sprintf("%s, %s, %s",
 			fmt.Sprintf("%d cloned", cloned),
