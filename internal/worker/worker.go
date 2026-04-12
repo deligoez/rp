@@ -86,6 +86,49 @@ func PoolWithProgress[T any, R any](items []T, concurrency int, opts PoolOptions
 		}
 		fmt.Fprint(os.Stderr, "\r"+strings.Repeat(" ", width)+"\r")
 	}
+	return results
+}
 
+// PoolWithLiveLog runs fn for each item with the given concurrency and
+// invokes onComplete after each item finishes, in completion order. It
+// does NOT print the legacy single-line progress bar — callers are
+// expected to emit their own per-item lines via onComplete.
+//
+// Results are returned in the same order as items (like PoolWithProgress).
+// onComplete is called under an internal mutex, so callers can safely
+// write to stdout/stderr without interleaving.
+func PoolWithLiveLog[T any, R any](
+	items []T,
+	concurrency int,
+	fn func(T) (R, error),
+	onComplete func(completed, total int, item T, result R, err error),
+) []Result[R] {
+	results := make([]Result[R], len(items))
+	total := len(items)
+
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	completed := 0
+
+	for i, item := range items {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, it T) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			val, err := fn(it)
+			results[idx] = Result[R]{Index: idx, Value: val, Err: err}
+			if onComplete != nil {
+				mu.Lock()
+				completed++
+				n := completed
+				onComplete(n, total, it, val, err)
+				mu.Unlock()
+			}
+		}(i, item)
+	}
+
+	wg.Wait()
 	return results
 }
