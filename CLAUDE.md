@@ -62,7 +62,8 @@ rp discover               # Find GitHub repos not in manifest (requires gh)
 -c, --concurrency <n>     Parallel workers (default: 4)
 --no-color                Disable colors
 ```
-
+rp discover               # Find GitHub repos not in manifest (requires gh)
+rp validate [path]        # Validate manifest structure (no side effects)
 ### Per-Command Flags
 ```
 bootstrap --dry-run
@@ -76,6 +77,7 @@ up --dry-run --no-install --no-update
 check                             # no flags except --filter
 diff --since <Nd|Nh>
 discover --forks --archived
+validate [path]                   # no flags beyond global
 ```
 
 ### Command Behavior
@@ -90,6 +92,7 @@ discover --forks --archived
 - **up**: Runs bootstrap → sync → install → update in sequence. `--no-install` skips the install phase. `--no-update` skips the update phase. JSON output wraps all four as sub-results.
 - **diff**: Shows latest commit (sha, message, date, days_ago) per repo. `--since` filters by recency.
 - **discover**: Lists GitHub repos not in manifest. Requires `gh` CLI. Scans personal account + all member orgs. `--forks` includes forks, `--archived` includes archived. Exit 0 = all tracked, exit 1 = untracked found.
+- **validate**: Loads the manifest via `manifest.Load()` and reports whether it parses and passes all validation rules. Positional `[path]` overrides `--manifest`. No side effects. Exit 0 = valid, exit 2 = parse/validation error. JSON summary has `valid`, `repos`, `owners`, `categories`, `install_commands`, `update_commands`.
 
 ## Project Structure
 
@@ -107,6 +110,7 @@ cmd/                      Cobra commands
   check.go                Boolean exit code, zero output
   diff.go                 Latest commit per repo, --since filter
   discover.go             Find untracked GitHub repos (requires gh CLI)
+  validate.go             Validate manifest structure, zero side effects
   discover_test.go        Unit tests (filterUntracked, matchesDiscoverFilter)
   json_test.go            JSON integration tests (subprocess)
 internal/
@@ -233,7 +237,7 @@ Tests across 6 test files:
 - `internal/git`: git operation tests (use temp repos)
 - `internal/runner`: command execution tests
 - `internal/output`: JSON serialization tests
-- `cmd/json_test.go`: end-to-end integration tests (subprocess: JSON output, check, diff, install dry-run, update dry-run, sync errors, hints, discover, QA regressions)
+- `cmd/json_test.go`: end-to-end integration tests (subprocess: JSON output, check, diff, install dry-run, update dry-run, sync errors, hints, discover, validate, QA regressions)
 - `cmd/discover_test.go`: unit tests for filterUntracked and matchesDiscoverFilter
 
 Git tests create real temp repos with `git init`, commits, and bare repos for clone/pull testing. Integration tests build the binary and run it as a subprocess.

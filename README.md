@@ -229,6 +229,18 @@ rp discover --json            # structured output
 
 Scans the authenticated user's personal account and all member orgs. Exit 0 = all repos tracked. Exit 1 = untracked repos found.
 
+### rp validate
+
+Check the manifest file for structural errors without running any side-effects.
+
+```bash
+rp validate                         # validate default manifest
+rp validate /path/to/other.yaml     # validate specific manifest
+rp validate --json                  # structured output with counts
+```
+
+Exit 0 = valid. Exit 2 = parse or validation error (with an actionable hint).
+
 ## Global Flags
 
 | Flag | Short | Default | Description |
