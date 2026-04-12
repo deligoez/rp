@@ -2564,3 +2564,311 @@ func TestQA_DepsCmdMigration(t *testing.T) {
 		t.Errorf("stderr should contain migration message, got: %q", stderrStr)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// rp validate tests
+// ---------------------------------------------------------------------------
+
+const validateSampleManifest = `
+base_dir: %s
+acme:
+  services:
+    - repo: acme/api
+      install:
+        - echo install api
+        - echo install api 2
+      update:
+        - echo update api
+    - repo: acme/web
+      install:
+        - echo install web
+opensource:
+  - repo: opensource/tools
+`
+
+func TestValidateValidManifest(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(validateSampleManifest, dir))
+
+	result := runRPJSON(t, binary, m, "validate")
+
+	assertString(t, result, "command", "validate")
+	assertFloat(t, result, "exit_code", 0)
+
+	summary, ok := result["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary object, got %T", result["summary"])
+	}
+	if valid, _ := summary["valid"].(bool); !valid {
+		t.Errorf("expected summary.valid=true, got %v", summary["valid"])
+	}
+	if got := summary["repos"].(float64); got != 3 {
+		t.Errorf("repos: want 3, got %v", got)
+	}
+	if got := summary["owners"].(float64); got != 2 {
+		t.Errorf("owners: want 2, got %v", got)
+	}
+	if got := summary["categories"].(float64); got != 1 {
+		t.Errorf("categories: want 1, got %v", got)
+	}
+	if got := summary["install_commands"].(float64); got != 3 {
+		t.Errorf("install_commands: want 3, got %v", got)
+	}
+	if got := summary["update_commands"].(float64); got != 1 {
+		t.Errorf("update_commands: want 1, got %v", got)
+	}
+}
+
+func TestValidateYAMLParseError(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, "base_dir: "+dir+"\nacme:\n  services:\n    - repo: [this is not valid\n")
+
+	result := runRPJSON(t, binary, m, "validate")
+
+	assertString(t, result, "command", "validate")
+	assertFloat(t, result, "exit_code", 2)
+	if errVal, _ := result["error"].(string); errVal == "" {
+		t.Errorf("expected non-empty error, got %v", result["error"])
+	}
+}
+
+func TestValidateSemanticError(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	// Invalid repo name (missing owner/name format).
+	m := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+acme:
+  services:
+    - repo: not-a-valid-repo-name
+`, dir))
+
+	result := runRPJSON(t, binary, m, "validate")
+
+	assertString(t, result, "command", "validate")
+	assertFloat(t, result, "exit_code", 2)
+	if errVal, _ := result["error"].(string); errVal == "" {
+		t.Errorf("expected non-empty error, got %v", result["error"])
+	}
+}
+
+func TestValidatePositionalPath(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	good := writeManifest(t, dir, fmt.Sprintf(validateSampleManifest, dir))
+
+	// Positional arg provided; pass a bogus --manifest that would otherwise fail,
+	// to confirm positional takes precedence.
+	cmd := exec.Command(binary, "--json", "--manifest", "/nonexistent/path.yaml", "validate", good)
+	out, _ := cmd.Output()
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	assertString(t, result, "command", "validate")
+	assertFloat(t, result, "exit_code", 0)
+}
+
+func TestValidatePositionalOverridesFlag(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	good := writeManifest(t, dir, fmt.Sprintf(validateSampleManifest, dir))
+	badDir := t.TempDir()
+	bad := writeManifest(t, badDir, "base_dir: /tmp\nacme:\n  services: []\n") // empty category → error
+
+	// --manifest points at bad manifest; positional points at good.
+	cmd := exec.Command(binary, "--json", "--manifest", bad, "validate", good)
+	out, _ := cmd.Output()
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	assertFloat(t, result, "exit_code", 0)
+}
+
+func TestValidateDepsKeyRejected(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/myrepo
+      deps:
+        - echo hello
+`, dir))
+
+	result := runRPJSON(t, binary, m, "validate")
+
+	assertFloat(t, result, "exit_code", 2)
+	errVal, _ := result["error"].(string)
+	if !strings.Contains(errVal, `removed key "deps"`) {
+		t.Errorf("error should mention removed deps key, got: %q", errVal)
+	}
+	hintVal, _ := result["hint"].(string)
+	if !strings.Contains(hintVal, `Rename "deps:" to "install:"`) {
+		t.Errorf("hint should suggest rename, got: %q", hintVal)
+	}
+}
+
+func TestValidateMissingManifest(t *testing.T) {
+	binary := binaryForTest(t)
+
+	result := runRPJSON(t, binary, "/nonexistent/path/manifest.yaml", "validate")
+
+	assertFloat(t, result, "exit_code", 2)
+	hint, _ := result["hint"].(string)
+	if hint == "" || !strings.Contains(strings.ToLower(hint), "manifest") {
+		t.Errorf("expected manifest hint, got: %q", hint)
+	}
+}
+
+func TestValidateHumanOutput(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(validateSampleManifest, dir))
+
+	cmd := exec.Command(binary, "--manifest", m, "validate")
+	cmd.Env = append(os.Environ(), "NO_COLOR=1")
+	var stdoutBuf, stderrBuf strings.Builder
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("validate failed: %v\nstderr: %s", err, stderrBuf.String())
+	}
+	out := stdoutBuf.String()
+	if !strings.Contains(out, "OK") {
+		t.Errorf("expected 'OK' in output, got: %q", out)
+	}
+	if !strings.Contains(out, "3 repos") {
+		t.Errorf("expected '3 repos' in output, got: %q", out)
+	}
+	if !strings.Contains(out, "valid") {
+		t.Errorf("expected 'valid' in output, got: %q", out)
+	}
+}
+
+func TestValidateSingularRepo(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+solo:
+  - repo: solo/only
+`, dir))
+
+	cmd := exec.Command(binary, "--manifest", m, "validate")
+	cmd.Env = append(os.Environ(), "NO_COLOR=1")
+	var stdoutBuf strings.Builder
+	cmd.Stdout = &stdoutBuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+	out := stdoutBuf.String()
+	if !strings.Contains(out, "1 repo ") && !strings.Contains(out, "1 repo\n") {
+		t.Errorf("expected singular '1 repo', got: %q", out)
+	}
+	if strings.Contains(out, "1 repos") {
+		t.Errorf("unexpected plural '1 repos' in: %q", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// QA regression tests for rp validate
+// ---------------------------------------------------------------------------
+
+// Q1: counts in JSON summary match actual manifest contents.
+func TestQA_ValidateCountsMatchRepos(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+acme:
+  services:
+    - repo: acme/api
+      install:
+        - echo a
+      update:
+        - echo b
+    - repo: acme/web
+      install:
+        - echo c
+      update:
+        - echo d
+`, dir))
+
+	result := runRPJSON(t, binary, m, "validate")
+	summary := result["summary"].(map[string]interface{})
+	if got := summary["repos"].(float64); got != 2 {
+		t.Errorf("repos: want 2, got %v", got)
+	}
+	if got := summary["install_commands"].(float64); got != 2 {
+		t.Errorf("install_commands: want 2, got %v", got)
+	}
+	if got := summary["update_commands"].(float64); got != 2 {
+		t.Errorf("update_commands: want 2, got %v", got)
+	}
+}
+
+// Q2: validate has no disk side-effects.
+func TestQA_ValidateNoSideEffects(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	_ = writeManifest(t, dir, fmt.Sprintf(validateSampleManifest, dir))
+
+	snapshot := func() []string {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("readdir: %v", err)
+		}
+		var names []string
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			names = append(names, e.Name())
+		}
+		return names
+	}
+
+	before := snapshot()
+	_ = runRPJSON(t, binary, filepath.Join(dir, "manifest.yaml"), "validate")
+	after := snapshot()
+
+	if strings.Join(before, ",") != strings.Join(after, ",") {
+		t.Errorf("validate caused disk changes:\nbefore: %v\nafter:  %v", before, after)
+	}
+}
+
+// Q3: categories count reflects unique category keys across categorized owners.
+func TestQA_ValidateCategoriesCount(t *testing.T) {
+	binary := binaryForTest(t)
+	dir := t.TempDir()
+	m := writeManifest(t, dir, fmt.Sprintf(`
+base_dir: %s
+acme:
+  services:
+    - repo: acme/api
+  tools:
+    - repo: acme/cli
+beta:
+  libs:
+    - repo: beta/lib
+opensource:
+  - repo: opensource/tools
+`, dir))
+
+	result := runRPJSON(t, binary, m, "validate")
+	summary := result["summary"].(map[string]interface{})
+	if got := summary["categories"].(float64); got != 3 {
+		t.Errorf("categories: want 3 (services, tools, libs), got %v", got)
+	}
+	if got := summary["owners"].(float64); got != 3 {
+		t.Errorf("owners: want 3, got %v", got)
+	}
+	if got := summary["repos"].(float64); got != 4 {
+		t.Errorf("repos: want 4, got %v", got)
+	}
+}
