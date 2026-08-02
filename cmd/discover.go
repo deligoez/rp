@@ -143,16 +143,21 @@ func matchesDiscoverFilter(nameWithOwner string, filters []string) bool {
 	lower := strings.ToLower(nameWithOwner)
 	for _, f := range filters {
 		fl := strings.ToLower(f)
-		if strings.HasSuffix(fl, "/") {
-			// Owner prefix match.
-			if strings.HasPrefix(lower, fl) {
-				return true
-			}
-		} else {
-			// Exact match.
+
+		// "owner/name" with both parts non-empty is an exact repo match;
+		// "owner/" and bare "owner" both match the owner. This mirrors
+		// manifest.FilterRepos so one filter string behaves the same on
+		// every command (comparison stays case-insensitive here because
+		// GitHub owner and repo names are).
+		if parts := strings.SplitN(fl, "/", 2); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
 			if lower == fl {
 				return true
 			}
+			continue
+		}
+
+		if strings.HasPrefix(lower, strings.TrimSuffix(fl, "/")+"/") {
+			return true
 		}
 	}
 	return false
