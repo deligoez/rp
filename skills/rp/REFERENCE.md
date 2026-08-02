@@ -270,8 +270,9 @@ Case-sensitive, no globs, no substrings, no category matching. Multiple filters 
 ## Internals worth knowing
 
 - **All git operations shell out to the `git` binary** — no Go git library. `git pull --ff-only` is the only mutation; there is no merge, rebase, or force path anywhere in the codebase.
-- **Worker pool** (`internal/worker`) runs `--concurrency` operations in parallel and re-orders results back into manifest order before printing, so output is deterministic.
-- **Progress lines** (`[n/m] verb…`) go to **stderr** and only when stdout is a TTY. They never appear in piped or `--json` consumption.
+- **Worker pool** (`internal/worker`) runs `--concurrency` operations in parallel. `PoolWithProgress` re-orders results into manifest order before printing; `PoolWithLiveLog` (v0.8.0) emits each result as it completes.
+- **Human progress output differs by command.** `bootstrap` / `sync` / `install` / `update` stream `[n/m] <label> <outcome>` lines to **stdout in completion order**, always (not TTY-gated) — they are the human result, and the old owner-grouped listing is gone. `rp up` kept the overwriting `[n/m] verb…` bar on **stderr**, TTY-gated, so it is empty when piped.
+- **`--json` is unchanged by all of this**: one JSON document on stdout, `repos` in manifest order, nothing on stderr.
 - **`os.Exit()` is only used on the human path**; JSON mode always goes through `output.PrintAndExit`, which encodes the body *and then* exits with `exit_code`.
 - **`--json` implies `--no-color`.**
 

@@ -26,7 +26,7 @@ Do **not** use rp for single-repo work — inspecting one repo's history, stagin
 - **rp reconciles in exactly one direction: remote → local.** It clones and it fast-forward-pulls. It never commits, pushes, stashes, resets, merges, rebases, force-pulls, or deletes anything. A repo that would need any of those is *reported and skipped* — dirty state is the human's call, never yours.
 - **The manifest is only written by `rp manifest init`.** Every other command reads it. To add a repo you edit the YAML (or ask the user to), then `rp validate`.
 - **Every command speaks JSON.** `--json` (or `RP_JSON=1`) turns any command into a data source with a stable schema. Never parse the human output.
-- **Progress goes to stderr, results to stdout.** `[n/m] cloning…` lines on stderr are TTY-only noise; never treat them as data.
+- **Human output is a live log, not a report.** Since v0.8.0 `bootstrap`, `sync`, `install`, and `update` stream one `[n/m] …` line per repo to **stdout as each repo finishes** — so the order is completion order, not manifest order, and slow repos land last. Only `rp up` still uses the old overwriting progress bar on stderr (TTY-gated, invisible in a pipe). `--json` is unaffected and stays in manifest order: it is the only output you should ever parse.
 
 ## Token economics — the drill-down ladder
 

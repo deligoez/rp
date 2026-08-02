@@ -382,7 +382,7 @@ hints for every command.
 - **Report only** — never auto-commit, auto-push, or auto-stash
 - **Shell out to git** — uses the `git` binary, not a Go git library
 - **Parallel** — worker pool with configurable concurrency
-- **Deterministic output** — results printed in manifest order
+- **Deterministic JSON** — `repos` is always in manifest order (human output streams in completion order)
 - **Agent-friendly** — structured JSON on every command, compact mode, filtering
 
 ## Tech Stack

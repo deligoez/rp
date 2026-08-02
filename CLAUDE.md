@@ -167,9 +167,9 @@ stale schema in REFERENCE.md as a bug of the same severity as a wrong `--help` s
 - JSON output when `--json` flag or `RP_JSON=1` env
 - `--compact` omits `repos` array from JSON (summary only)
 - Human output: colored symbols OK (green), !! (yellow), XX (red)
-- Progress on stderr: `[n/m] verb...` (TTY only)
+- Human progress: `bootstrap`/`sync`/`install`/`update` stream `[n/m] ...` per-repo lines to stdout in completion order (`PoolWithLiveLog`); `up` keeps the overwriting `[n/m] verb...` bar on stderr (TTY only)
 - All git operations shell out to `git` binary (no go-git library)
-- Worker pool preserves manifest order in output
+- Worker pool preserves manifest order in JSON output (human live-log output is completion order)
 - Manifest uses yaml.Node for key order preservation
 - `os.Exit()` only in human mode; JSON mode uses `output.PrintAndExit`
 - Errors wrapped with `output.HintError` for actionable hints
