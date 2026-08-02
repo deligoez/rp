@@ -2,6 +2,15 @@
 
 Manages a developer's local workspace of git repositories. Go CLI tool.
 
+## Committing in this repo
+
+ALWAYS commit through `hc` — never `git add` / `git commit` / `git commit -a`. Read
+`hc diff --json` once, start from `hc plan`, review every entry, then `hc run`. Follow the
+granularity rules in the `hc` skill: one file per commit by default; multi-file only for
+mechanical sweeps or inseparable changes; `feat`/`fix`/`test`/`docs` never share a commit;
+each NEW test is its own commit, separate from the code it covers. Commit at unit-of-work
+cadence — after each change plus its passing test — never as one batch at the end.
+
 ## Key Concept: AX (Agent Experience)
 
 rp is designed for both human and AI agent users. The `--json` flag enables structured output for agent consumption. All commands support `--json`, `--compact`, and `--filter` flags.
