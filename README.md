@@ -212,6 +212,13 @@ rp up --no-install        # skip install phase
 rp up --no-update         # skip update phase
 ```
 
+`install` and `update` run manifest-defined shell commands via `sh -c` — preview an unfamiliar
+manifest with `--dry-run` first, or use `rp up --no-install --no-update` for a git-only refresh.
+
+JSON output uses per-phase sub-objects (`bootstrap`, `sync`, `install`, `update`) instead of a
+top-level `summary`/`repos`. A phase skipped with `--no-install`/`--no-update` serializes as
+`null`. The exit code is the highest across phases.
+
 ### rp check
 
 Boolean exit code — zero output, for scripts and CI.
