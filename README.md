@@ -335,6 +335,10 @@ Example:
 }
 ```
 
+Per-repo state fields (`clean`, `dirty_files`, `ahead`, `behind`, `has_upstream`) are present
+for every cloned repo, including as `0`/`false`; they are absent only when the repo is not
+cloned. Branch on `cloned` first.
+
 Errors in JSON mode include actionable hints:
 
 ```json
