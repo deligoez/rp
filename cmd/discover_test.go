@@ -174,3 +174,31 @@ func TestMatchesDiscoverFilter(t *testing.T) {
 		}
 	})
 }
+
+// Regression: a bare owner ("acme") used to be treated as an exact
+// "owner/name" match and therefore matched nothing, while every other
+// command accepts it. See manifest.FilterRepos for the shared semantics.
+func TestMatchesDiscoverFilterBareOwner(t *testing.T) {
+	cases := []struct {
+		name   string
+		repo   string
+		filter string
+		want   bool
+	}{
+		{"bare owner matches", "acme/repo", "acme", true},
+		{"bare owner, wrong owner", "acme/repo", "other", false},
+		{"bare owner is not a prefix", "acmecorp/repo", "acme", false},
+		{"trailing slash still works", "acme/repo", "acme/", true},
+		{"exact repo still works", "acme/repo", "acme/repo", true},
+		{"exact repo does not match sibling", "acme/other", "acme/repo", false},
+		{"bare owner is case-insensitive", "Acme/Repo", "acme", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := matchesDiscoverFilter(tc.repo, []string{tc.filter}); got != tc.want {
+				t.Fatalf("matchesDiscoverFilter(%q, [%q]) = %v, want %v", tc.repo, tc.filter, got, tc.want)
+			}
+		})
+	}
+}
