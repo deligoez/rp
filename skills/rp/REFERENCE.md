@@ -61,13 +61,7 @@ Precedence for every one of these: **CLI flag > env var > default**.
 
 No `summary`, no `repos`. `hint` is present only when the error was wrapped in a `HintError` (see the hint table below). Human mode prints the same two lines to **stderr** as `error: …` / `hint:  …`.
 
-> **`command` is not reliable on the error path.** Errors that bubble up to the root handler are stamped `"command": "rp"` instead of the subcommand's name. Verified on a missing manifest:
->
-> | Reports its own name | Reports `"rp"` |
-> |---|---|
-> | `sync` `up` `install` `update` `validate` `discover` | `status` `list` `bootstrap` `diff` |
->
-> Global-flag errors (e.g. `-c 0`) are always `"rp"`. **Route errors on `exit_code` + `error`/`hint`, never on `command`.**
+`command` carries the failing subcommand's own name on every command (v0.9.0; `status`, `list`, `bootstrap`, `diff`, and `check` previously reported `"rp"`). A **global-flag** error — rejected before any subcommand runs, e.g. `-c 0` — is still stamped `"rp"`, which is accurate: no subcommand was reached.
 
 ### UpResult — `rp up` only
 
@@ -202,7 +196,7 @@ Scans `--dir` (default `.`), finds git repos with GitHub remotes, and infers fla
 
 ### `check`
 
-No output in any mode, including `--json`. Exit 0 all clean and cloned · 1 anything uncloned, unreadable, or needing attention · 2 manifest error.
+No output on exit 0 or 1, in any mode including `--json`. A manifest error (exit 2) does print an `ErrorResult` — that is the only output `check` ever produces. Exit 0 all clean and cloned · 1 anything uncloned, unreadable, or needing attention · 2 manifest error.
 
 ## Error hints
 

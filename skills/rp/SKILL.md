@@ -58,7 +58,7 @@ Answering "is `acme/api` dirty?" with a full `rp status --json` is the single mo
 
 In JSON mode the same value is in the body as `exit_code`, so one capture gives you both. **Exit 1 is a finding, not a crash** — a tool wrapper that treats non-zero as failure will misreport `rp status` and `rp check`.
 
-On an error, branch on `exit_code` and read `error` + `hint`. **Do not branch on `command`**: `status`, `list`, `bootstrap`, and `diff` report `"command": "rp"` instead of their own name when the manifest fails to load.
+On an error, branch on `exit_code` and read `error` + `hint`. Since v0.9.0 every command stamps its own name in `command`, so routing on it is safe; only a global-flag error (e.g. `-c 0`, rejected before any subcommand runs) reports `"rp"`.
 
 Per-command specifics: `rp check` is 0/1/2 with *zero output*. `rp discover` exits 1 when untracked repos exist. `rp bootstrap` never exits 1 — clone failures are 2. `rp install`/`update` exit 1 on skips, 2 on any command failure.
 

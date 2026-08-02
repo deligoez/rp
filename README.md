@@ -345,10 +345,13 @@ Errors in JSON mode include actionable hints:
 {
   "command": "status",
   "exit_code": 2,
-  "error": "reading manifest: open /bad/path: no such file",
+  "error": "loading manifest: reading manifest: open /bad/path: no such file",
   "hint": "create manifest with: rp manifest init --dir ~/Developer"
 }
 ```
+
+`command` always names the subcommand that failed. Only an invalid global flag — rejected before
+any subcommand runs — reports `"rp"`.
 
 ## Environment Variables
 
