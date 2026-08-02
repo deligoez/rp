@@ -255,6 +255,9 @@ rp discover --json            # structured output
 
 Scans the authenticated user's personal account and all member orgs. Exit 0 = all repos tracked. Exit 1 = untracked repos found.
 
+`discover` uses its own filter syntax: matching is case-insensitive and an owner match requires
+the trailing slash (`--filter acme/`). A bare `--filter acme` matches nothing here.
+
 ### rp validate
 
 Check the manifest file for structural errors without running any side-effects.
