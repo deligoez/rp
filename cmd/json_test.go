@@ -2902,3 +2902,47 @@ func TestJSONErrorCommandName(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// sync --dry-run must populate the summary counters, matching bootstrap's
+// dry-run semantics ("cloned" means "would clone"). Regression: the would_*
+// actions incremented nothing, so --dry-run --compact carried no information.
+// ---------------------------------------------------------------------------
+
+func TestJSONSyncDryRunSummary(t *testing.T) {
+	binary := binaryForTest(t)
+	base := t.TempDir()
+
+	// One cloned clean repo (would pull) and one missing repo (would clone).
+	initGitRepo(t, filepath.Join(base, "owner", "projects", "cloned"))
+
+	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
+base_dir: %s
+owner:
+  projects:
+    - repo: owner/cloned
+    - repo: owner/missing
+`, base))
+
+	result := runRPJSON(t, binary, manifest, "sync", "--dry-run")
+
+	assertString(t, result, "command", "sync")
+	summary := assertKey(t, result, "summary").(map[string]interface{})
+
+	if summary["total"].(float64) != 2 {
+		t.Fatalf("total: want 2, got %v", summary["total"])
+	}
+	if summary["cloned"].(float64) != 1 {
+		t.Errorf("cloned (would clone): want 1, got %v", summary["cloned"])
+	}
+
+	// Every repo must be accounted for by some counter — the actual bug was
+	// that all of them stayed at zero.
+	var counted float64
+	for _, k := range []string{"pulled", "up_to_date", "cloned", "skipped", "failed"} {
+		counted += summary[k].(float64)
+	}
+	if counted != summary["total"].(float64) {
+		t.Errorf("counters sum to %v, want total %v: %v", counted, summary["total"], summary)
+	}
+}
