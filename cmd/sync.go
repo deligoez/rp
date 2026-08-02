@@ -210,8 +210,10 @@ func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest
 			summary.Failed++
 		case syncActionWouldPull:
 			rj.Action = "would_pull"
+			summary.Pulled++
 		case syncActionWouldSkip:
 			rj.Action = "would_skip"
+			summary.Skipped++
 			switch v.skipReason {
 			case syncSkipDirty:
 				rj.Reason = "dirty"
@@ -229,6 +231,7 @@ func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest
 			}
 		case syncActionWouldClone:
 			rj.Action = "would_clone"
+			summary.Cloned++
 		}
 
 		repoList = append(repoList, rj)
