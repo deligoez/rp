@@ -142,6 +142,12 @@ spec/                     Specs and task breakdowns, versioned
 main.go                   Entry point
 ```
 
+### Skill Maintenance
+`skills/rp/` is a user-facing contract, not documentation-by-courtesy. Any change to a
+command's flags, JSON keys, exit codes, filter semantics, or error hints MUST update
+`SKILL.md` (if it changes what an agent should *do*) and `REFERENCE.md` (always). Treat a
+stale schema in REFERENCE.md as a bug of the same severity as a wrong `--help` string.
+
 ### Spec File Convention
 - Specs live in `spec/` as flat files: `v{version}.md` and `v{version}.json`
 - Suffix variants (e.g. `v0.1.0-ax`) are allowed for additive specs within a release
