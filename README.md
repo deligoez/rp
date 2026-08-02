@@ -290,6 +290,10 @@ rp status --filter acme                  # same as above
 rp sync --filter acme/ --filter vendor/  # multiple owners
 ```
 
+Matching is exact — no globs, no substrings, and categories are not filterable
+(`--filter acme/services` is read as a repo named `services`). A filter that matches nothing
+is not an error: you get an empty result and exit 0.
+
 ## JSON Output
 
 All commands support `--json` for structured output. Also enabled with `RP_JSON=1` env var.
