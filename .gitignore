@@ -1,5 +1,5 @@
-# Binary
-rp
+# Binary (root only — a bare "rp" would also ignore skills/rp/)
+/rp
 dist/
 
 # OS
