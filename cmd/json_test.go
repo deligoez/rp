@@ -2872,3 +2872,33 @@ opensource:
 		t.Errorf("repos: want 4, got %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Error envelope: every command stamps its own name on a manifest-load failure.
+// Regression: status/list/bootstrap/diff/check used to let the error reach the
+// root handler, which stamped "rp" and hid which command failed.
+// ---------------------------------------------------------------------------
+
+func TestJSONErrorCommandName(t *testing.T) {
+	binary := binaryForTest(t)
+	missing := filepath.Join(t.TempDir(), "nope.yaml")
+
+	for _, name := range []string{
+		"status", "list", "bootstrap", "diff", "check",
+		"sync", "install", "update", "validate", "discover", "up",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(binary, "--json", "--manifest", missing, name)
+			out, _ := cmd.Output()
+
+			var result map[string]interface{}
+			if err := json.Unmarshal(out, &result); err != nil {
+				t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+			}
+
+			assertString(t, result, "command", name)
+			assertFloat(t, result, "exit_code", 2)
+			assertKey(t, result, "hint")
+		})
+	}
+}
