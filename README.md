@@ -367,6 +367,16 @@ Errors in JSON mode include actionable hints:
 | 1 | Some repos need attention (dirty, missing, behind) |
 | 2 | Hard error (manifest parse, clone failure, command failure) |
 
+## Claude Code Skill
+
+```bash
+npx skills add -g deligoez/rp
+```
+
+The skill lives in [`skills/rp/`](skills/rp/) — `SKILL.md` covers when to reach for rp, the
+workflows, and the anti-patterns; `REFERENCE.md` has the full JSON schema, enums, and error
+hints for every command.
+
 ## Design Principles
 
 - **Report only** — never auto-commit, auto-push, or auto-stash
