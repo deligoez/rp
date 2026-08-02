@@ -136,6 +136,19 @@ func init() {
 	)
 }
 
+// manifestError reports a manifest-load failure for the named command.
+// In JSON mode it prints an ErrorResult stamped with that command name and
+// exits; otherwise it returns the wrapped error for the human path. Without
+// this, the error reaches the root handler and is stamped "rp", so an agent
+// cannot tell which command failed.
+func manifestError(command string, err error) error {
+	wrapped := fmt.Errorf("loading manifest: %w", err)
+	if output.IsJSON() {
+		output.PrintErrorAndExit(command, wrapped)
+	}
+	return wrapped
+}
+
 // Execute runs the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
