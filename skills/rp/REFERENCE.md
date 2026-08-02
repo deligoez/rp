@@ -176,7 +176,7 @@ Exit 1 when `missing > 0`. `--missing` restricts the output to uncloned repos.
 
 Requires the `gh` CLI, authenticated. Scans the personal account plus every org the user is a member of. Forks and archived repos are excluded unless `--forks` / `--archived`. Exit 1 when `untracked > 0`.
 
-> **`discover` uses its own filter syntax, different from every other command:** matching is **case-insensitive**, an owner match **requires the trailing slash** (`acme/`), and anything without a trailing slash is an exact `owner/name` match. A bare `--filter acme` matches nothing here, even though it works everywhere else.
+`discover` accepts the same three filter forms as every other command (v0.9.0 — a bare `acme` previously matched nothing). The one remaining difference: matching here is **case-insensitive**, because GitHub owner and repo names are.
 
 ### `validate`
 
@@ -259,7 +259,7 @@ Parsed via `yaml.Node` so key order is preserved — all output is in manifest o
 "owner"       → repo.Owner == "owner"          (same as above)
 ```
 
-Case-sensitive, no globs, no substrings, no category matching. Multiple filters union. An empty filter list means "all repos". A no-match filter yields an empty list and exit 0 — not an error. (`rp discover` deviates; see above.)
+Case-sensitive, no globs, no substrings, no category matching. Multiple filters union. An empty filter list means "all repos". A no-match filter yields an empty list and exit 0 — not an error. `rp discover` applies the same three forms case-insensitively.
 
 ## Internals worth knowing
 

@@ -169,7 +169,7 @@ Traps:
 - **No globs, no substrings, no regex.** `--filter acme*` matches nothing. Owner comparison is `==`, despite "prefix" wording in older docs.
 - **You cannot filter by category.** `--filter acme/services` is read as an exact repo named `services` under `acme` → zero matches. Filter the owner and select categories from the JSON.
 - **A no-match filter is not an error** — you get an empty `repos` array and exit 0. Silence here means "your filter was wrong", not "everything is fine". Check `summary.total`.
-- **`rp discover` has its own, different filter syntax** — case-insensitive, and an owner match *requires* the trailing slash. `--filter acme` matches nothing in `discover` while working everywhere else. Always write `acme/` there.
+- **`rp discover` matches case-insensitively** (GitHub names are), while every other command is case-sensitive. Since v0.9.0 the three filter forms behave identically everywhere; before that, a bare `acme` matched nothing in `discover`.
 - **For `install` / `update`, a positional repo argument overrides `--filter`** and warns on stderr. `rp install acme/api --filter vendor/` installs `acme/api` only. An unknown positional exits 2 with a hint; an unknown `--filter` is silently empty.
 
 ## Editing the manifest

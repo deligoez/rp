@@ -255,8 +255,8 @@ rp discover --json            # structured output
 
 Scans the authenticated user's personal account and all member orgs. Exit 0 = all repos tracked. Exit 1 = untracked repos found.
 
-`discover` uses its own filter syntax: matching is case-insensitive and an owner match requires
-the trailing slash (`--filter acme/`). A bare `--filter acme` matches nothing here.
+`discover` accepts the same filter forms as every other command; matching here is
+case-insensitive, because GitHub owner and repo names are.
 
 ### rp validate
 
