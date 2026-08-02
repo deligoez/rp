@@ -132,6 +132,15 @@ each repo is in `repos[].action` (`would_pull` / `would_skip` / `would_clone`) a
 ### rp status
 
 Show the state of every repo.
+
+```bash
+rp status                 # every repo
+rp status --dirty         # only repos with uncommitted changes
+rp status --ahead         # only repos with unpushed commits
+rp status --behind        # only repos behind their remote
+```
+
+```
 acme
   services/api               OK main
   services/web               !! main +2 ahead
@@ -143,6 +152,12 @@ opensource
 
 -- Summary --
 3 OK, 2 need attention, 1 not cloned
+```
+
+A repo needs attention when it is dirty, or when it has an upstream and is ahead or behind.
+A clean repo with no upstream counts as OK. `--dirty`/`--ahead`/`--behind` filter the printed
+list only — they do not change the summary counts or the exit code.
+
 ### rp install
 
 Run install commands defined in the manifest.
