@@ -304,6 +304,8 @@ rp status --json --compact    # summary only, no per-repo details
 rp list --json --filter acme/
 ```
 
+`--compact` removes the `repos` key entirely — it is absent, not empty.
+
 Example:
 
 ```json
