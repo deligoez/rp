@@ -125,6 +125,10 @@ Evaluation order per repo:
 4. Unpushed commits — skip
 5. Clean — `git pull --ff-only`
 
+Under `--dry-run` the JSON summary counters stay `0` (only `total` is set) — the outcome of
+each repo is in `repos[].action` (`would_pull` / `would_skip` / `would_clone`) and
+`repos[].reason`. Don't pair `sync --dry-run` with `--compact`.
+
 ### rp status
 
 Show the state of every repo.
