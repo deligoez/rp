@@ -132,6 +132,9 @@ internal/
     ui.go                 Lipgloss symbols (OK/!!/XX), Plural, PadRight
   worker/
     worker.go             Generic Pool[T,R] with progress on stderr
+skills/rp/
+  SKILL.md                Agent skill for Claude Code (activation, workflows, anti-patterns)
+  REFERENCE.md            Full JSON schemas, enums, hint table, manifest schema
 spec/                     Specs and task breakdowns, versioned
   v{version}/             One folder per release (e.g. v0.1.0, v0.2.0)
     spec.md               Feature/release spec
