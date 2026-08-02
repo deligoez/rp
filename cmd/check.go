@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/deligoez/rp/internal/git"
@@ -22,7 +21,7 @@ func init() {
 func runCheck(_ *cobra.Command, _ []string) error {
 	m, err := manifest.Load(ManifestPath)
 	if err != nil {
-		return fmt.Errorf("loading manifest: %w", err)
+		return manifestError("check", err)
 	}
 
 	repos := manifest.FilterRepos(m.Repos(), Filters)

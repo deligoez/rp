@@ -81,7 +81,7 @@ var bootstrapCmd = &cobra.Command{
 		// 1. Load manifest.
 		m, err := manifest.Load(ManifestPath)
 		if err != nil {
-			return fmt.Errorf("loading manifest: %w", err)
+			return manifestError("bootstrap", err)
 		}
 
 		repos := manifest.FilterRepos(m.Repos(), Filters)

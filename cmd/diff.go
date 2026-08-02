@@ -41,7 +41,7 @@ type diffRepoResult struct {
 func runDiff(cmd *cobra.Command, args []string) error {
 	m, err := manifest.Load(ManifestPath)
 	if err != nil {
-		return fmt.Errorf("loading manifest: %w", err)
+		return manifestError("diff", err)
 	}
 
 	// Parse --since flag if provided.

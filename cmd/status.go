@@ -92,7 +92,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	m, err := manifest.Load(ManifestPath)
 	if err != nil {
-		return fmt.Errorf("loading manifest: %w", err)
+		return manifestError("status", err)
 	}
 
 	// Apply --filter flag: narrow down to matching owners/repos.

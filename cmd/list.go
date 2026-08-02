@@ -49,7 +49,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	m, err := manifest.Load(ManifestPath)
 	if err != nil {
-		return fmt.Errorf("loading manifest: %w", err)
+		return manifestError("list", err)
 	}
 
 	// Apply --filter to repo list.
