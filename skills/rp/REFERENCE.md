@@ -123,7 +123,7 @@ Per-repo evaluation order (first match wins): not cloned → clone · not a git 
 
 Exit code is the highest per-repo code; `--dry-run` always exits 0.
 
-> **Under `--dry-run` every summary counter stays 0** (only `total` is set) — the counters are incremented on the real actions, not the `would_*` ones. Read `repos[].action` / `repos[].reason` instead, and never pair `sync --dry-run` with `--compact`: the result carries no information at all.
+Under `--dry-run` the counters carry the *would-be* outcome (v0.9.0): `would_pull` → `pulled`, `would_skip` → `skipped`, `would_clone` → `cloned` — same convention as `bootstrap --dry-run`, so `sync --dry-run --compact` is a usable preview. `repos[].action` still carries the `would_*` name and `repos[].reason` the skip cause.
 
 ### `bootstrap`
 

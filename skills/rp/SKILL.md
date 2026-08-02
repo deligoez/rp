@@ -43,8 +43,6 @@ rp status --json --dirty                      # only the problems, all owners
 ```
 
 > **`--compact` removes the `repos` key entirely** — it is absent, not `[]`. Code that reads `repos` must not use `--compact`.
->
-> **The ladder does not apply to `sync --dry-run`**: its summary counters all stay 0 (only `total` is set), because they count real actions and dry-run only produces `would_*` ones. Read `repos[].action` there, never the summary.
 
 Answering "is `acme/api` dirty?" with a full `rp status --json` is the single most common waste. Use `--filter acme/api`.
 
@@ -219,7 +217,7 @@ Removed keys still worth recognising, because their error is specific: a top-lev
 - **Do NOT parse human output.** The symbols (`OK`/`!!`/`XX`), padding, and grouping are for terminals and are not a contract. `--json` is.
 - **Do NOT reconstruct `local_path` from `base_dir`.** Flat vs categorized changes the depth. Read `local_path`.
 - **Do NOT use `--compact` and then read `repos`.** The key is absent in compact mode.
-- **Do NOT read dry-run counts as a different schema.** `bootstrap --dry-run` reuses `cloned`/`already_existed` to mean *would* clone / *would* skip; `dry_run: true` in the body is the discriminator. `sync --dry-run` is the opposite trap — its counters stay 0 and only `repos[].action` carries the answer.
+- **Do NOT read dry-run counts as a different schema.** `bootstrap --dry-run` and `sync --dry-run` reuse the normal counters to mean *would* clone / *would* pull / *would* skip; `dry_run: true` in the body is the discriminator, and `repos[].action` carries the `would_*` detail.
 - **Do NOT treat exit 1 as failure.** It is rp's "you should look at this" channel and is expected from `status`, `list --missing`, `check`, `discover`, and `install`/`update` with skips.
 - **Do NOT assume `install`/`update` are idempotent or safe.** They run whatever the manifest author wrote, in the repo directory, via `sh -c`.
 
