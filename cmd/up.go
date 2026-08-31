@@ -620,21 +620,7 @@ func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet m
 			case syncActionSkipped:
 				rj.Action = "skipped"
 				summary.Skipped++
-				switch v.skipReason {
-				case syncSkipDirty:
-					rj.Reason = "dirty"
-					rj.DirtyFiles = v.dirtyFiles
-				case syncSkipUnpushed:
-					rj.Reason = "unpushed"
-					rj.Ahead = v.ahead
-					rj.Branch = v.branch
-				case syncSkipDiverged:
-					rj.Reason = "diverged"
-				case syncSkipNoUpstream:
-					rj.Reason = "no_upstream"
-				case syncSkipNotARepo:
-					rj.Reason = "not_a_repo"
-				}
+				setSyncSkipReason(&rj, v)
 			case syncActionFailed:
 				rj.Action = "failed"
 				rj.Error = v.errMsg
@@ -643,21 +629,7 @@ func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet m
 				rj.Action = "would_pull"
 			case syncActionWouldSkip:
 				rj.Action = "would_skip"
-				switch v.skipReason {
-				case syncSkipDirty:
-					rj.Reason = "dirty"
-					rj.DirtyFiles = v.dirtyFiles
-				case syncSkipUnpushed:
-					rj.Reason = "unpushed"
-					rj.Ahead = v.ahead
-					rj.Branch = v.branch
-				case syncSkipDiverged:
-					rj.Reason = "diverged"
-				case syncSkipNoUpstream:
-					rj.Reason = "no_upstream"
-				case syncSkipNotARepo:
-					rj.Reason = "not_a_repo"
-				}
+				setSyncSkipReason(&rj, v)
 			case syncActionWouldClone:
 				rj.Action = "would_clone"
 			}
