@@ -161,6 +161,26 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // buildAndPrintSyncJSON constructs the JSON result and calls output.PrintAndExit.
+// setSyncSkipReason records why a repo was skipped, with the extra fields the
+// reason carries. Skipped and would-skip report it identically.
+func setSyncSkipReason(rj *syncRepoJSON, v syncResult) {
+	switch v.skipReason {
+	case syncSkipDirty:
+		rj.Reason = "dirty"
+		rj.DirtyFiles = v.dirtyFiles
+	case syncSkipUnpushed:
+		rj.Reason = "unpushed"
+		rj.Ahead = v.ahead
+		rj.Branch = v.branch
+	case syncSkipDiverged:
+		rj.Reason = "diverged"
+	case syncSkipNoUpstream:
+		rj.Reason = "no_upstream"
+	case syncSkipNotARepo:
+		rj.Reason = "not_a_repo"
+	}
+}
+
 func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest.RepoEntry, dryRun bool) error {
 	summary := syncSummaryJSON{Total: len(repos)}
 	repoList := make([]syncRepoJSON, 0, len(results))
@@ -189,21 +209,7 @@ func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest
 		case syncActionSkipped:
 			rj.Action = "skipped"
 			summary.Skipped++
-			switch v.skipReason {
-			case syncSkipDirty:
-				rj.Reason = "dirty"
-				rj.DirtyFiles = v.dirtyFiles
-			case syncSkipUnpushed:
-				rj.Reason = "unpushed"
-				rj.Ahead = v.ahead
-				rj.Branch = v.branch
-			case syncSkipDiverged:
-				rj.Reason = "diverged"
-			case syncSkipNoUpstream:
-				rj.Reason = "no_upstream"
-			case syncSkipNotARepo:
-				rj.Reason = "not_a_repo"
-			}
+			setSyncSkipReason(&rj, v)
 		case syncActionFailed:
 			rj.Action = "failed"
 			rj.Error = v.errMsg
@@ -214,21 +220,7 @@ func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest
 		case syncActionWouldSkip:
 			rj.Action = "would_skip"
 			summary.Skipped++
-			switch v.skipReason {
-			case syncSkipDirty:
-				rj.Reason = "dirty"
-				rj.DirtyFiles = v.dirtyFiles
-			case syncSkipUnpushed:
-				rj.Reason = "unpushed"
-				rj.Ahead = v.ahead
-				rj.Branch = v.branch
-			case syncSkipDiverged:
-				rj.Reason = "diverged"
-			case syncSkipNoUpstream:
-				rj.Reason = "no_upstream"
-			case syncSkipNotARepo:
-				rj.Reason = "not_a_repo"
-			}
+			setSyncSkipReason(&rj, v)
 		case syncActionWouldClone:
 			rj.Action = "would_clone"
 			summary.Cloned++
