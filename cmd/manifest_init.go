@@ -509,7 +509,7 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 	// 8. JSON output path: write YAML to --output if set, then emit JSON (no YAML in JSON).
 	if output.IsJSON() {
 		if writeToFile {
-			if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0644); writeErr != nil {
+			if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0o644); writeErr != nil {
 				output.PrintErrorAndExit("manifest_init", fmt.Errorf("writing output file: %w", writeErr))
 			}
 		}
@@ -518,7 +518,7 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 
 	// 9. Human output path: write YAML.
 	if writeToFile {
-		if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0644); writeErr != nil {
+		if writeErr := os.WriteFile(manifestInitOutput, yamlBytes, 0o644); writeErr != nil {
 			return fmt.Errorf("writing output file: %w", writeErr)
 		}
 		fmt.Fprintf(os.Stderr, "manifest written to %s\n", manifestInitOutput)

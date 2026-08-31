@@ -269,7 +269,7 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 				action:   syncActionWouldClone,
 			}
 		}
-		if mkErr := os.MkdirAll(filepath.Dir(path), 0755); mkErr != nil {
+		if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
 			msg := "could not create parent dirs: " + mkErr.Error()
 			return syncResult{
 				label:    label,

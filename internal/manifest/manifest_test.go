@@ -15,7 +15,7 @@ func writeManifest(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.yaml")
-	os.WriteFile(path, []byte(content), 0644)
+	os.WriteFile(path, []byte(content), 0o644)
 	return path
 }
 

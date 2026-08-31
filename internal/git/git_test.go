@@ -20,7 +20,7 @@ func initRepoWithCommit(t *testing.T) string {
 	run(t, dir, "git", "init")
 	run(t, dir, "git", "config", "user.email", "test@test.com")
 	run(t, dir, "git", "config", "user.name", "Test")
-	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, dir, "git", "add", ".")
@@ -121,7 +121,7 @@ func addCommitToBare(t *testing.T, bareDir string) {
 	run(t, t.TempDir(), "git", "clone", bareDir, tmpClone)
 	run(t, tmpClone, "git", "config", "user.email", "test@test.com")
 	run(t, tmpClone, "git", "config", "user.name", "Test")
-	if err := os.WriteFile(filepath.Join(tmpClone, "extra.txt"), []byte("extra"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpClone, "extra.txt"), []byte("extra"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, tmpClone, "git", "add", ".")
@@ -141,7 +141,7 @@ func newBareRepoWithCommit(t *testing.T) string {
 	run(t, t.TempDir(), "git", "clone", bareDir, seedClone)
 	run(t, seedClone, "git", "config", "user.email", "test@test.com")
 	run(t, seedClone, "git", "config", "user.name", "Test")
-	if err := os.WriteFile(filepath.Join(seedClone, "seed.txt"), []byte("seed"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(seedClone, "seed.txt"), []byte("seed"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, seedClone, "git", "add", ".")
@@ -212,7 +212,7 @@ func TestPull_Diverged(t *testing.T) {
 	addCommitToBare(t, bareDir)
 
 	// Make a local commit so the clone also advances (diverged).
-	if err := os.WriteFile(filepath.Join(cloneDir, "local.txt"), []byte("local"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cloneDir, "local.txt"), []byte("local"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, cloneDir, "git", "add", ".")
@@ -258,7 +258,7 @@ func TestStatus_Dirty(t *testing.T) {
 	dir := initRepoWithCommit(t)
 
 	// Modify the tracked file to make the working tree dirty.
-	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("dirty"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("dirty"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestStatus_Ahead(t *testing.T) {
 	run(t, cloneDir, "git", "config", "user.name", "Test")
 
 	// Add a local commit in the clone (not pushed).
-	if err := os.WriteFile(filepath.Join(cloneDir, "extra.txt"), []byte("extra"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(cloneDir, "extra.txt"), []byte("extra"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, cloneDir, "git", "add", ".")
@@ -340,7 +340,7 @@ func TestStatus_Behind(t *testing.T) {
 	run(t, cloneDir, "git", "config", "user.name", "Test")
 
 	// Add a new commit directly to origin after the clone was taken.
-	if err := os.WriteFile(filepath.Join(originDir, "new.txt"), []byte("new"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(originDir, "new.txt"), []byte("new"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(t, originDir, "git", "add", ".")
@@ -394,7 +394,7 @@ func TestStatus_DetachedHEAD(t *testing.T) {
 func TestQA_StatusUntrackedDirty(t *testing.T) {
 	dir := initRepoWithCommit(t)
 	// Add untracked file (not git-added)
-	os.WriteFile(filepath.Join(dir, "UNTRACKED.txt"), []byte("new"), 0644)
+	os.WriteFile(filepath.Join(dir, "UNTRACKED.txt"), []byte("new"), 0o644)
 
 	s, err := git.Status(dir)
 	if err != nil {
@@ -412,7 +412,7 @@ func TestQA_StatusUntrackedDirty(t *testing.T) {
 func TestQA_StatusStagedDirty(t *testing.T) {
 	dir := initRepoWithCommit(t)
 	// Modify and stage (but don't commit)
-	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("modified"), 0644)
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("modified"), 0o644)
 	run(t, dir, "git", "add", "f.txt")
 
 	s, err := git.Status(dir)

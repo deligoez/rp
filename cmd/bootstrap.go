@@ -312,7 +312,7 @@ func processBootstrapEntry(entry manifest.RepoEntry) bootstrapResult {
 
 	// Path does not exist — create parent dirs and clone.
 	parentDir := filepath.Dir(entry.LocalPath)
-	if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+	if mkErr := os.MkdirAll(parentDir, 0o755); mkErr != nil {
 		return bootstrapResult{
 			Entry:  entry,
 			Status: bsFailed,

@@ -85,7 +85,7 @@ func runRPJSON(t *testing.T, binary, manifestPath string, args ...string) map[st
 func writeManifest(t *testing.T, dir, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, "manifest.yaml")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("writeManifest: %v", err)
 	}
 	return path
@@ -95,7 +95,7 @@ func writeManifest(t *testing.T, dir, content string) string {
 // returns the path.
 func initGitRepo(t *testing.T, repoDir string) string {
 	t.Helper()
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll %s: %v", repoDir, err)
 	}
 	run := func(args ...string) {
@@ -111,7 +111,7 @@ func initGitRepo(t *testing.T, repoDir string) string {
 	run("config", "user.name", "Test User")
 	// Create an initial commit so LastCommitDate is available.
 	readmePath := filepath.Join(repoDir, "README.md")
-	if err := os.WriteFile(readmePath, []byte("hello\n"), 0644); err != nil {
+	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
 		t.Fatalf("write README: %v", err)
 	}
 	run("add", "README.md")
@@ -125,7 +125,7 @@ func makeDirtyGitRepo(t *testing.T, repoDir string) string {
 	t.Helper()
 	initGitRepo(t, repoDir)
 	// Write a second file without staging/committing it → dirty.
-	if err := os.WriteFile(filepath.Join(repoDir, "dirty.txt"), []byte("dirty\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(repoDir, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
 		t.Fatalf("write dirty.txt: %v", err)
 	}
 	return repoDir
@@ -1209,7 +1209,7 @@ func TestSyncCleanErrorEmptyRepo(t *testing.T) {
 
 	// Create a git repo with NO commits (just git init, no commit).
 	emptyDir := filepath.Join(base, "owner", "projects", "empty")
-	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	c := exec.Command("git", "init")
@@ -1590,7 +1590,7 @@ func TestSyncCleanErrorGeneric(t *testing.T) {
 
 	// Create a bare "upstream" repo.
 	bareDir := filepath.Join(base, "bare.git")
-	if err := os.MkdirAll(bareDir, 0755); err != nil {
+	if err := os.MkdirAll(bareDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll bare: %v", err)
 	}
 	runGit := func(dir string, args ...string) {
@@ -1605,7 +1605,7 @@ func TestSyncCleanErrorGeneric(t *testing.T) {
 
 	// Clone the bare repo so we have a local copy with a valid remote.
 	cloneDir := filepath.Join(base, "owner", "projects", "thatrepo")
-	if err := os.MkdirAll(filepath.Dir(cloneDir), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cloneDir), 0o755); err != nil {
 		t.Fatalf("MkdirAll clone parent: %v", err)
 	}
 	c := exec.Command("git", "clone", bareDir, cloneDir)
@@ -1617,7 +1617,7 @@ func TestSyncCleanErrorGeneric(t *testing.T) {
 
 	// Make a commit in the clone so it has history.
 	readmePath := filepath.Join(cloneDir, "README.md")
-	if err := os.WriteFile(readmePath, []byte("hello\n"), 0644); err != nil {
+	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
 		t.Fatalf("write README: %v", err)
 	}
 	runGit(cloneDir, "add", "README.md")
@@ -1732,7 +1732,7 @@ func TestDiffSinceExcludes(t *testing.T) {
 	base := t.TempDir()
 
 	repoDir := filepath.Join(base, "owner", "projects", "oldrepo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
@@ -1753,7 +1753,7 @@ func TestDiffSinceExcludes(t *testing.T) {
 	runCmd(baseEnv, repoDir, "git", "config", "user.name", "Test User")
 
 	readmePath := filepath.Join(repoDir, "README.md")
-	if err := os.WriteFile(readmePath, []byte("old\n"), 0644); err != nil {
+	if err := os.WriteFile(readmePath, []byte("old\n"), 0o644); err != nil {
 		t.Fatalf("write README: %v", err)
 	}
 	runCmd(baseEnv, repoDir, "git", "add", "README.md")
@@ -1801,7 +1801,7 @@ func TestDiffEmptyRepoSkipped(t *testing.T) {
 	base := t.TempDir()
 
 	emptyDir := filepath.Join(base, "owner", "projects", "empty")
-	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	c := exec.Command("git", "init")
@@ -2339,7 +2339,7 @@ func TestQA_UpInstallNewClone(t *testing.T) {
 	run(t.TempDir(), "git", "clone", bareDir, seedClone)
 	run(seedClone, "git", "config", "user.email", "test@test.com")
 	run(seedClone, "git", "config", "user.name", "Test")
-	if err := os.WriteFile(filepath.Join(seedClone, "seed.txt"), []byte("seed"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(seedClone, "seed.txt"), []byte("seed"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	run(seedClone, "git", "add", ".")
@@ -2351,7 +2351,7 @@ func TestQA_UpInstallNewClone(t *testing.T) {
 	gitConfigPath := filepath.Join(gitConfigDir, ".gitconfig")
 	repoName := "owner/cloneme"
 	gitConfigContent := fmt.Sprintf("[url %q]\n\tinsteadOf = git@github.com:%s.git\n", bareDir, repoName)
-	if err := os.WriteFile(gitConfigPath, []byte(gitConfigContent), 0644); err != nil {
+	if err := os.WriteFile(gitConfigPath, []byte(gitConfigContent), 0o644); err != nil {
 		t.Fatalf("write gitconfig: %v", err)
 	}
 
