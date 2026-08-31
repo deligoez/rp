@@ -36,12 +36,12 @@ func TestMain(m *testing.M) {
 	cmd.Dir = ".." // project root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n%s\n", err, out)
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		os.Exit(1)
 	}
 
 	code := m.Run()
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
 
@@ -187,7 +187,7 @@ func mapKeys(m map[string]interface{}) []string {
 func processExitCode(binary, manifestPath string, args ...string) int {
 	all := append([]string{"--json", "--manifest", manifestPath}, args...)
 	cmd := exec.Command(binary, all...)
-	cmd.Run() //nolint:errcheck
+	_ = cmd.Run() // exit code is read from ProcessState below
 	if cmd.ProcessState != nil {
 		return cmd.ProcessState.ExitCode()
 	}
@@ -813,7 +813,7 @@ owner:
 	// Process exit code must also be 2.
 	args := []string{"--json", "--manifest", manifestPath, "up"}
 	cmd := exec.Command(binary, args...)
-	cmd.Run() //nolint:errcheck
+	_ = cmd.Run() // exit code is read from ProcessState below
 	if cmd.ProcessState != nil {
 		proc := cmd.ProcessState.ExitCode()
 		if proc != 2 {
@@ -938,7 +938,7 @@ func TestHintHumanModeStderr(t *testing.T) {
 	var stdoutBuf, stderrBuf strings.Builder
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
-	cmd.Run() //nolint:errcheck
+	_ = cmd.Run() // exit code is read from ProcessState below
 
 	stderr := stderrBuf.String()
 
@@ -1224,7 +1224,7 @@ func TestSyncCleanErrorEmptyRepo(t *testing.T) {
 	} {
 		c2 := exec.Command("git", args...)
 		c2.Dir = emptyDir
-		c2.CombinedOutput() //nolint:errcheck
+		_, _ = c2.CombinedOutput() // git setup; a failure surfaces in the assertions below
 	}
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
@@ -1267,7 +1267,7 @@ func runCheckCmd(binary, manifestPath string, extraArgs ...string) (stdout, stde
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
-	cmd.Run() //nolint:errcheck
+	_ = cmd.Run() // exit code is read from ProcessState below
 	ec := 0
 	if cmd.ProcessState != nil {
 		ec = cmd.ProcessState.ExitCode()
@@ -1815,7 +1815,7 @@ func TestDiffEmptyRepoSkipped(t *testing.T) {
 	} {
 		c2 := exec.Command("git", args...)
 		c2.Dir = emptyDir
-		c2.CombinedOutput() //nolint:errcheck
+		_, _ = c2.CombinedOutput() // git setup; a failure surfaces in the assertions below
 	}
 
 	manifest := writeManifest(t, t.TempDir(), fmt.Sprintf(`
@@ -2048,7 +2048,7 @@ nobody:
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Run()
+	_ = cmd.Run()
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
@@ -2160,7 +2160,7 @@ nobody:
 	cmd := exec.Command(binary, "--json", "--manifest", manifestPath, "discover")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Run()
+	_ = cmd.Run()
 
 	exitCode := cmd.ProcessState.ExitCode()
 
