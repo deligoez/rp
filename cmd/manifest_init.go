@@ -413,30 +413,51 @@ func tildeCollapse(path string) string {
 	return path
 }
 
-func runManifestInit(cmd *cobra.Command, args []string) error {
-	// 1. Resolve --dir to an absolute path.
+// resolveScanRoot turns --dir into an absolute directory path.
+func resolveScanRoot() (string, error) {
 	scanRoot, err := filepath.Abs(manifestInitDir)
 	if err != nil {
-		return fmt.Errorf("resolving --dir: %w", err)
+		return "", fmt.Errorf("resolving --dir: %w", err)
 	}
 
 	info, err := os.Stat(scanRoot)
 	if err != nil {
-		return fmt.Errorf("cannot access --dir %q: %w", scanRoot, err)
+		return "", fmt.Errorf("cannot access --dir %q: %w", scanRoot, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("--dir %q is not a directory", scanRoot)
+		return "", fmt.Errorf("--dir %q is not a directory", scanRoot)
+	}
+
+	return scanRoot, nil
+}
+
+// checkManifestInitOutput reports whether the result goes to a file, refusing
+// to overwrite one that already exists. Checked before any scanning work.
+func checkManifestInitOutput() (writeToFile bool, err error) {
+	writeToFile = manifestInitOutput != "" && manifestInitOutput != "stdout"
+	if !writeToFile || manifestInitDryRun {
+		return writeToFile, nil
+	}
+	if _, statErr := os.Stat(manifestInitOutput); statErr == nil {
+		return writeToFile, output.NewHintError(
+			fmt.Errorf("output file %q already exists; delete it first", manifestInitOutput),
+			fmt.Sprintf("delete %s first, or use stdout", manifestInitOutput),
+		)
+	}
+	return writeToFile, nil
+}
+
+func runManifestInit(cmd *cobra.Command, args []string) error {
+	// 1. Resolve --dir to an absolute path.
+	scanRoot, err := resolveScanRoot()
+	if err != nil {
+		return err
 	}
 
 	// 2. Check --output before doing any work.
-	writeToFile := manifestInitOutput != "" && manifestInitOutput != "stdout"
-	if writeToFile && !manifestInitDryRun {
-		if _, statErr := os.Stat(manifestInitOutput); statErr == nil {
-			return output.NewHintError(
-				fmt.Errorf("output file %q already exists; delete it first", manifestInitOutput),
-				fmt.Sprintf("delete %s first, or use stdout", manifestInitOutput),
-			)
-		}
+	writeToFile, err := checkManifestInitOutput()
+	if err != nil {
+		return err
 	}
 
 	// 3. Walk directory tree.
