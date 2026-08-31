@@ -451,6 +451,55 @@ func checkManifestInitOutput() (writeToFile bool, err error) {
 	return writeToFile, nil
 }
 
+// scanGitHubRepos reads each repo's origin remote and keeps the ones hosted on
+// GitHub, reporting on stderr why each other one was passed over.
+func scanGitHubRepos(repoPaths []string, scanRoot string) (discovered []scannedRepo, skipped int) {
+	for _, repoPath := range repoPaths {
+		originURL := readOriginURL(repoPath)
+		if originURL == "" {
+			fmt.Fprintf(os.Stderr, "skipping %s: no origin remote\n", repoPath)
+			skipped++
+			continue
+		}
+
+		ghOwner, ghName := parseGitHubRemote(originURL)
+		if ghOwner == "" {
+			fmt.Fprintf(os.Stderr, "skipping %s: non-GitHub or unparseable remote %q\n", repoPath, originURL)
+			skipped++
+			continue
+		}
+
+		ownerDir, foundByName := inferOwnerDir(repoPath, scanRoot, ghOwner)
+
+		discovered = append(discovered, scannedRepo{
+			absPath:   repoPath,
+			ghOwner:   ghOwner,
+			ghRepo:    ghOwner + "/" + ghName,
+			repoName:  ghName,
+			ownerDir:  ownerDir,
+			ownerFlat: !foundByName, // ownerFlat==true means we fell back to immediate parent
+		})
+	}
+	return discovered, skipped
+}
+
+// printManifestInitDryRun lists what was found without generating YAML. The
+// JSON path exits here.
+func printManifestInitDryRun(discovered []scannedRepo, skipped int) {
+	if output.IsJSON() {
+		output.PrintAndExit(buildManifestInitResult(discovered, skipped, true))
+	}
+
+	fmt.Printf("Found %d repos:\n", len(discovered))
+	for _, r := range discovered {
+		label := fmt.Sprintf("%s/%s", r.ghOwner, r.repoName)
+		fmt.Printf("  %-30s %s\n", label, tildeCollapse(r.absPath))
+	}
+	if skipped > 0 {
+		fmt.Printf("  (%d repos skipped — no GitHub remote)\n", skipped)
+	}
+}
+
 func runManifestInit(cmd *cobra.Command, args []string) error {
 	// 1. Resolve --dir to an absolute path.
 	scanRoot, err := resolveScanRoot()
@@ -471,51 +520,11 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// 4. Read remote URLs and parse GitHub info.
-	var discovered []scannedRepo
-	var skipped int
-
-	for _, repoPath := range repoPaths {
-		originURL := readOriginURL(repoPath)
-		if originURL == "" {
-			fmt.Fprintf(os.Stderr, "skipping %s: no origin remote\n", repoPath)
-			skipped++
-			continue
-		}
-
-		ghOwner, ghName := parseGitHubRemote(originURL)
-		if ghOwner == "" {
-			fmt.Fprintf(os.Stderr, "skipping %s: non-GitHub or unparseable remote %q\n", repoPath, originURL)
-			skipped++
-			continue
-		}
-
-		ownerDir, foundByName := inferOwnerDir(repoPath, scanRoot, ghOwner)
-
-		repo := scannedRepo{
-			absPath:   repoPath,
-			ghOwner:   ghOwner,
-			ghRepo:    ghOwner + "/" + ghName,
-			repoName:  ghName,
-			ownerDir:  ownerDir,
-			ownerFlat: !foundByName, // ownerFlat==true means we fell back to immediate parent
-		}
-		discovered = append(discovered, repo)
-	}
+	discovered, skipped := scanGitHubRepos(repoPaths, scanRoot)
 
 	// 5. Dry-run output.
 	if manifestInitDryRun {
-		if output.IsJSON() {
-			output.PrintAndExit(buildManifestInitResult(discovered, skipped, true))
-		}
-
-		fmt.Printf("Found %d repos:\n", len(discovered))
-		for _, r := range discovered {
-			label := fmt.Sprintf("%s/%s", r.ghOwner, r.repoName)
-			fmt.Printf("  %-30s %s\n", label, tildeCollapse(r.absPath))
-		}
-		if skipped > 0 {
-			fmt.Printf("  (%d repos skipped — no GitHub remote)\n", skipped)
-		}
+		printManifestInitDryRun(discovered, skipped)
 		return nil
 	}
 
