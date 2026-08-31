@@ -411,15 +411,40 @@ func printUpHumanSummary(boot upBootstrapOutcome, sync upSyncCounts, inst, upd u
 	}
 }
 
+// upExitTally accumulates what up's exit code depends on. Each phase reports
+// its own numbers so the code is derived from them directly, in both output
+// modes, rather than reconstructed from the assembled result.
+//
+// Only sync contributes skipped: a repo sync passed over still needs a look,
+// while an install skipped because the repo is not on disk is not an error.
+type upExitTally struct {
+	failed  int
+	skipped int
+}
+
+func (t *upExitTally) add(o upExitTally) {
+	t.failed += o.failed
+	t.skipped += o.skipped
+}
+
+// code is 2 when any phase failed, 1 when sync skipped a repo, else 0.
+func (t upExitTally) code() int {
+	switch {
+	case t.failed > 0:
+		return 2
+	case t.skipped > 0:
+		return 1
+	default:
+		return 0
+	}
+}
+
 // upHumanExitCode is the highest exit code across the four phases.
 func upHumanExitCode(boot upBootstrapOutcome, sync upSyncCounts, inst, upd upCommandCounts) int {
-	if boot.failed > 0 || sync.failed > 0 || inst.failed > 0 || upd.failed > 0 {
-		return 2
-	}
-	if sync.skipped > 0 {
-		return 1
-	}
-	return 0
+	return upExitTally{
+		failed:  boot.failed + sync.failed + inst.failed + upd.failed,
+		skipped: sync.skipped,
+	}.code()
 }
 
 // ── JSON mode ────────────────────────────────────────────────────────────────
@@ -430,28 +455,33 @@ func runUpJSON(repos []manifest.RepoEntry) error {
 		DryRun:  upDryRun,
 	}
 
-	clonedSet, failedSet := upJSONBootstrap(&result, repos)
-	upJSONSync(&result, repos, clonedSet)
+	var tally upExitTally
 
-	result.Install = upJSONCommandPhase(upCommandPhase{
+	clonedSet, failedSet, bootTally := upJSONBootstrap(&result, repos)
+	tally.add(bootTally)
+	tally.add(upJSONSync(&result, repos, clonedSet))
+
+	install, installTally := upJSONCommandPhase(upCommandPhase{
 		verb:       "installing",
 		enabled:    !upNoInstall,
 		commandsOf: func(r manifest.RepoEntry) []string { return r.Install },
 		isTarget:   func(r manifest.RepoEntry) bool { return clonedSet[r.Repo] },
 	}, repos)
+	result.Install = install
+	tally.add(installTally)
 
-	result.Update = upJSONCommandPhase(upCommandPhase{
+	update, updateTally := upJSONCommandPhase(upCommandPhase{
 		verb:       "updating",
 		enabled:    !upNoUpdate,
 		commandsOf: func(r manifest.RepoEntry) []string { return r.Update },
 		isTarget:   func(r manifest.RepoEntry) bool { return !clonedSet[r.Repo] && !failedSet[r.Repo] },
 	}, repos)
+	result.Update = update
+	tally.add(updateTally)
 
 	// ── Compute exit code ────────────────────────────────────────────────────
-	if upDryRun {
-		result.ExitCode = 0
-	} else {
-		result.ExitCode = upExitCode(result)
+	if !upDryRun {
+		result.ExitCode = tally.code()
 	}
 
 	output.PrintAndExit(result)
@@ -460,7 +490,7 @@ func runUpJSON(repos []manifest.RepoEntry) error {
 
 // upJSONBootstrap fills result.Bootstrap and reports which repos were cloned
 // and which failed, for the phases that follow.
-func upJSONBootstrap(result *output.UpResult, repos []manifest.RepoEntry) (clonedSet, failedSet map[string]bool) {
+func upJSONBootstrap(result *output.UpResult, repos []manifest.RepoEntry) (clonedSet, failedSet map[string]bool, tally upExitTally) {
 	// ── Phase 1: Bootstrap ───────────────────────────────────────────────────
 	var bootstrapWorkerResults []worker.Result[bootstrapResult]
 
@@ -533,13 +563,14 @@ func upJSONBootstrap(result *output.UpResult, repos []manifest.RepoEntry) (clone
 			},
 			Repos: bsRepos,
 		}
+		tally.failed = nFailed
 	}
 
-	return clonedSet, failedSet
+	return clonedSet, failedSet, tally
 }
 
 // upJSONSync fills result.Sync.
-func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet map[string]bool) {
+func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet map[string]bool) (tally upExitTally) {
 	// ── Phase 2: Sync ────────────────────────────────────────────────────────
 	syncWorkerResults := worker.PoolWithProgress(
 		repos,
@@ -627,50 +658,11 @@ func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet m
 			Summary: summary,
 			Repos:   syncRepos,
 		}
+		tally.failed = summary.Failed
+		tally.skipped = summary.Skipped
 	}
 
-}
-
-// upExitCode returns the highest exit code across all phases of an UpResult.
-func upExitCode(r output.UpResult) int {
-	highest := 0
-
-	if r.Bootstrap != nil {
-		if s, ok := r.Bootstrap.Summary.(bootstrapSummaryJSON); ok {
-			if s.Failed > 0 && highest < 2 {
-				highest = 2
-			}
-		}
-	}
-
-	if r.Sync != nil {
-		if s, ok := r.Sync.Summary.(syncSummaryJSON); ok {
-			if s.Failed > 0 && highest < 2 {
-				highest = 2
-			}
-			if s.Skipped > 0 && highest < 1 {
-				highest = 1
-			}
-		}
-	}
-
-	if r.Install != nil {
-		if s, ok := r.Install.Summary.(map[string]int); ok {
-			if s["failed"] > 0 && highest < 2 {
-				highest = 2
-			}
-		}
-	}
-
-	if r.Update != nil {
-		if s, ok := r.Update.Summary.(map[string]int); ok {
-			if s["failed"] > 0 && highest < 2 {
-				highest = 2
-			}
-		}
-	}
-
-	return highest
+	return tally
 }
 
 // upJSONCmdEntry is one command's outcome in the up JSON result.
@@ -699,9 +691,9 @@ func emptyUpCommandResult() *output.SubResult {
 // upJSONCommandPhase runs one command phase and returns its sub-result. A
 // phase turned off with --no-install / --no-update returns nil, which
 // serializes as null.
-func upJSONCommandPhase(phase upCommandPhase, repos []manifest.RepoEntry) *output.SubResult {
+func upJSONCommandPhase(phase upCommandPhase, repos []manifest.RepoEntry) (*output.SubResult, upExitTally) {
 	if !phase.enabled {
-		return nil
+		return nil, upExitTally{}
 	}
 
 	var targets []manifest.RepoEntry
@@ -711,11 +703,11 @@ func upJSONCommandPhase(phase upCommandPhase, repos []manifest.RepoEntry) *outpu
 		}
 	}
 	if len(targets) == 0 {
-		return emptyUpCommandResult()
+		return emptyUpCommandResult(), upExitTally{}
 	}
 
 	if upDryRun {
-		return upJSONCommandDryRun(phase, targets)
+		return upJSONCommandDryRun(phase, targets), upExitTally{}
 	}
 	return upJSONCommandRun(phase, targets)
 }
@@ -761,7 +753,7 @@ func upJSONCommandDryRun(phase upCommandPhase, targets []manifest.RepoEntry) *ou
 
 // upJSONCommandRun executes each target's commands and reports the outcome in
 // manifest order.
-func upJSONCommandRun(phase upCommandPhase, targets []manifest.RepoEntry) *output.SubResult {
+func upJSONCommandRun(phase upCommandPhase, targets []manifest.RepoEntry) (*output.SubResult, upExitTally) {
 	workerResults := worker.PoolWithProgress(
 		targets,
 		Concurrency,
@@ -832,5 +824,5 @@ func upJSONCommandRun(phase upCommandPhase, targets []manifest.RepoEntry) *outpu
 			"commands":  commandCount,
 		},
 		Repos: entries,
-	}
+	}, upExitTally{failed: failed}
 }
