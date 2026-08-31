@@ -52,39 +52,36 @@ func runList(cmd *cobra.Command, args []string) error {
 		return manifestError("list", err)
 	}
 
-	// Apply --filter to repo list.
 	filteredRepos := manifest.FilterRepos(m.Repos(), Filters)
+	blocks, totalRepos, totalMissing := buildListBlocks(m, filteredRepos)
 
-	// Build a set of filtered repo names for fast lookup.
+	if output.IsJSON() {
+		printListJSON(filteredRepos, totalRepos, totalMissing)
+	}
+
+	printListHuman(blocks, totalRepos, totalMissing)
+	return nil
+}
+
+// buildListBlocks groups the filtered repos into owner and category blocks in
+// manifest order, and reports how many repos were visible and how many of
+// those are missing from disk.
+func buildListBlocks(m *manifest.Manifest, filteredRepos []manifest.RepoEntry) (blocks []listOwnerBlock, totalRepos, totalMissing int) {
 	filteredSet := make(map[string]bool, len(filteredRepos))
 	for _, r := range filteredRepos {
 		filteredSet[r.Repo] = true
 	}
-
-	totalRepos := 0
-	totalMissing := 0
-
-	var blocks []listOwnerBlock
 
 	for _, owner := range m.Owners() {
 		catOrder := []string{}
 		catMap := map[string][]listRepoLine{}
 
 		for _, entry := range owner.Repos {
-			// Skip repos excluded by filter.
 			if !filteredSet[entry.Repo] {
 				continue
 			}
 
-			repoName := listRepoBaseName(entry.Repo)
 			exists := listDirExists(entry.LocalPath)
-
-			rl := listRepoLine{
-				name:   repoName,
-				path:   listTildeCollapse(entry.LocalPath),
-				exists: exists,
-			}
-
 			totalRepos++
 			if !exists {
 				totalMissing++
@@ -94,20 +91,20 @@ func runList(cmd *cobra.Command, args []string) error {
 			if _, seen := catMap[cat]; !seen {
 				catOrder = append(catOrder, cat)
 			}
-			catMap[cat] = append(catMap[cat], rl)
-		}
-
-		var catBlocks []listCategoryBlock
-		for _, cat := range catOrder {
-			catBlocks = append(catBlocks, listCategoryBlock{
-				name:  cat,
-				repos: catMap[cat],
+			catMap[cat] = append(catMap[cat], listRepoLine{
+				name:   listRepoBaseName(entry.Repo),
+				path:   listTildeCollapse(entry.LocalPath),
+				exists: exists,
 			})
 		}
 
-		// Skip empty owner blocks (all repos filtered out).
-		if len(catBlocks) == 0 {
+		if len(catOrder) == 0 {
 			continue
+		}
+
+		catBlocks := make([]listCategoryBlock, 0, len(catOrder))
+		for _, cat := range catOrder {
+			catBlocks = append(catBlocks, listCategoryBlock{name: cat, repos: catMap[cat]})
 		}
 
 		blocks = append(blocks, listOwnerBlock{
@@ -117,111 +114,112 @@ func runList(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// JSON output path.
-	if output.IsJSON() {
-		type jsonRepo struct {
-			Repo      string `json:"repo"`
-			Owner     string `json:"owner"`
-			Category  string `json:"category"`
-			LocalPath string `json:"local_path"`
-			Exists    bool   `json:"exists"`
-		}
+	return blocks, totalRepos, totalMissing
+}
 
-		jsonRepos := make([]jsonRepo, 0, len(filteredRepos))
-		for _, entry := range filteredRepos {
-			exists := listDirExists(entry.LocalPath)
-			if listMissing && exists {
-				continue
-			}
-			jsonRepos = append(jsonRepos, jsonRepo{
-				Repo:      entry.Repo,
-				Owner:     entry.Owner,
-				Category:  entry.Category,
-				LocalPath: entry.LocalPath,
-				Exists:    exists,
-			})
-		}
+// printListJSON writes the list result and exits.
+func printListJSON(filteredRepos []manifest.RepoEntry, totalRepos, totalMissing int) {
+	type jsonRepo struct {
+		Repo      string `json:"repo"`
+		Owner     string `json:"owner"`
+		Category  string `json:"category"`
+		LocalPath string `json:"local_path"`
+		Exists    bool   `json:"exists"`
+	}
 
-		exitCode := 0
-		if totalMissing > 0 {
-			exitCode = 1
+	jsonRepos := make([]jsonRepo, 0, len(filteredRepos))
+	for _, entry := range filteredRepos {
+		exists := listDirExists(entry.LocalPath)
+		if listMissing && exists {
+			continue
 		}
-
-		output.PrintAndExit(output.SuccessResult{
-			Command:  "list",
-			ExitCode: exitCode,
-			Summary: map[string]int{
-				"total":   totalRepos,
-				"missing": totalMissing,
-			},
-			Repos: jsonRepos,
+		jsonRepos = append(jsonRepos, jsonRepo{
+			Repo:      entry.Repo,
+			Owner:     entry.Owner,
+			Category:  entry.Category,
+			LocalPath: entry.LocalPath,
+			Exists:    exists,
 		})
 	}
 
-	// Compute column widths across all visible lines for aligned output.
-	nameWidth := 0
-	pathWidth := 0
+	exitCode := 0
+	if totalMissing > 0 {
+		exitCode = 1
+	}
 
+	output.PrintAndExit(output.SuccessResult{
+		Command:  "list",
+		ExitCode: exitCode,
+		Summary: map[string]int{
+			"total":   totalRepos,
+			"missing": totalMissing,
+		},
+		Repos: jsonRepos,
+	})
+}
+
+// listColumnWidths measures the widest name and path among the rows that will
+// actually be printed, so every row aligns.
+func listColumnWidths(blocks []listOwnerBlock) (nameWidth, pathWidth int) {
 	for _, ob := range blocks {
 		for _, cb := range ob.categories {
 			for _, rl := range cb.repos {
-				if !listMissing || !rl.exists {
-					if len(rl.name) > nameWidth {
-						nameWidth = len(rl.name)
-					}
-					if len(rl.path) > pathWidth {
-						pathWidth = len(rl.path)
-					}
+				if listMissing && rl.exists {
+					continue
+				}
+				if len(rl.name) > nameWidth {
+					nameWidth = len(rl.name)
+				}
+				if len(rl.path) > pathWidth {
+					pathWidth = len(rl.path)
 				}
 			}
 		}
 	}
+	return nameWidth, pathWidth
+}
 
-	// Print output.
+// printListHuman renders the owner blocks and the summary, then exits 1 when
+// any repo is missing.
+func printListHuman(blocks []listOwnerBlock, totalRepos, totalMissing int) {
+	nameWidth, pathWidth := listColumnWidths(blocks)
+
 	for _, ob := range blocks {
 		if listMissing && !listOwnerHasMissing(ob) {
 			continue
 		}
 
 		fmt.Println(ob.name)
-
 		for _, cb := range ob.categories {
 			if listMissing && !listCategoryHasMissing(cb) {
 				continue
 			}
-
-			if ob.isFlat {
-				// Flat owner: repos at 2-space indent, no category sub-header.
-				for _, rl := range cb.repos {
-					if listMissing && rl.exists {
-						continue
-					}
-					fmt.Println(listFormatRepoLine(rl, 2, nameWidth, pathWidth))
-				}
-			} else {
-				// Categorized owner: category sub-header at 2-space indent.
-				fmt.Printf("  %s\n", cb.name)
-				for _, rl := range cb.repos {
-					if listMissing && rl.exists {
-						continue
-					}
-					fmt.Println(listFormatRepoLine(rl, 4, nameWidth, pathWidth))
-				}
-			}
+			printListCategory(ob, cb, nameWidth, pathWidth)
 		}
-
 		fmt.Println()
 	}
 
-	// Summary.
-	totalStr := ui.Plural(totalRepos, "repo")
-	fmt.Printf("-- %s total, %d missing --\n", totalStr, totalMissing)
+	fmt.Printf("-- %s total, %d missing --\n", ui.Plural(totalRepos, "repo"), totalMissing)
 
 	if totalMissing > 0 {
 		os.Exit(1)
 	}
+}
 
-	return nil
+// printListCategory renders one category: a flat owner prints its repos
+// directly, a categorized one prints a sub-header first.
+func printListCategory(ob listOwnerBlock, cb listCategoryBlock, nameWidth, pathWidth int) {
+	indent := 2
+	if !ob.isFlat {
+		fmt.Printf("  %s\n", cb.name)
+		indent = 4
+	}
+	for _, rl := range cb.repos {
+		if listMissing && rl.exists {
+			continue
+		}
+		fmt.Println(listFormatRepoLine(rl, indent, nameWidth, pathWidth))
+	}
 }
 
 // listFormatRepoLine renders one repo row with indent and aligned columns.
