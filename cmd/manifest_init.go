@@ -217,6 +217,66 @@ func inferOwnerDir(repoPath, rootDir, ghOwner string) (string, bool) {
 
 // resolveLayouts groups scanned repos by their inferred owner directory and
 // determines flat vs categorized layout per owner.
+// splitReposByDepth sorts an owner's repos by how deep they sit below the
+// owner directory: one level means flat, two or more means the intermediate
+// path is the category.
+func splitReposByDepth(ownerDir string, repos []scannedRepo) (depth1, depth2 []scannedRepo) {
+	for _, r := range repos {
+		rel, err := filepath.Rel(ownerDir, r.absPath)
+		if err != nil {
+			// Shouldn't happen; treat as depth-1.
+			depth1 = append(depth1, r)
+			continue
+		}
+		parts := strings.Split(rel, string(os.PathSeparator))
+		switch len(parts) {
+		case 1:
+			depth1 = append(depth1, r)
+		case 2:
+			r.category = parts[0]
+			depth2 = append(depth2, r)
+		default:
+			// Deeper than 2 — treat as depth-2 with nested category path.
+			r.category = strings.Join(parts[:len(parts)-1], "/")
+			depth2 = append(depth2, r)
+		}
+	}
+	return depth1, depth2
+}
+
+// resolveOwnerRepos decides an owner's layout from the depth split. An owner
+// with repos at both depths is categorized, with the depth-1 ones collected
+// under a "repos" category and a warning.
+func resolveOwnerRepos(ownerDirName string, depth1, depth2 []scannedRepo) (repos []scannedRepo, isFlat bool) {
+	switch {
+	case len(depth1) > 0 && len(depth2) == 0:
+		// All repos one level below ownerDir — flat.
+		for i := range depth1 {
+			depth1[i].category = ""
+		}
+		return depth1, true
+
+	case len(depth2) > 0 && len(depth1) == 0:
+		// All repos two levels below ownerDir — categorized.
+		return depth2, false
+
+	case len(depth1) == 0:
+		return depth2, false
+	}
+
+	// Mixed — categorized, depth-1 repos go into "repos" category.
+	fmt.Fprintf(os.Stderr, "warning: owner %q has mixed-depth repos; depth-1 repos placed in \"repos\" category\n", ownerDirName)
+	for i := range depth1 {
+		depth1[i].category = "repos"
+	}
+	// Build a fresh slice: appending depth1 onto depth2 would write into
+	// depth2's spare capacity.
+	merged := make([]scannedRepo, 0, len(depth2)+len(depth1))
+	merged = append(merged, depth2...)
+	merged = append(merged, depth1...)
+	return merged, false
+}
+
 func resolveLayouts(repos []scannedRepo) []ownerLayout {
 	// Group repos by ownerDir absolute path.
 	type group struct {
@@ -248,64 +308,8 @@ func resolveLayouts(repos []scannedRepo) []ownerLayout {
 	for _, odPath := range ownerDirOrder {
 		g := byOwnerDir[odPath]
 
-		// Determine depth of each repo relative to ownerDir.
-		// depth 1 → flat (repo directly under ownerDir)
-		// depth 2 → categorized (intermediate subdir is category)
-		var depth1, depth2 []scannedRepo
-
-		for _, r := range g.repos {
-			rel, err := filepath.Rel(odPath, r.absPath)
-			if err != nil {
-				// Shouldn't happen; treat as depth-1.
-				depth1 = append(depth1, r)
-				continue
-			}
-			parts := strings.Split(rel, string(os.PathSeparator))
-			switch len(parts) {
-			case 1:
-				depth1 = append(depth1, r)
-			case 2:
-				r.category = parts[0]
-				depth2 = append(depth2, r)
-			default:
-				// Deeper than 2 — treat as depth-2 with nested category path.
-				r.category = strings.Join(parts[:len(parts)-1], "/")
-				depth2 = append(depth2, r)
-			}
-		}
-
-		isFlat := len(depth1) > 0 && len(depth2) == 0
-		isCategorized := len(depth2) > 0 && len(depth1) == 0
-
-		var resolvedRepos []scannedRepo
-
-		switch {
-		case isFlat:
-			// All repos one level below ownerDir — flat.
-			for i := range depth1 {
-				depth1[i].category = ""
-			}
-			resolvedRepos = depth1
-		case isCategorized:
-			// All repos two levels below ownerDir — categorized.
-			resolvedRepos = depth2
-		default:
-			// Mixed — categorized, depth-1 repos go into "repos" category.
-			if len(depth1) > 0 {
-				fmt.Fprintf(os.Stderr, "warning: owner %q has mixed-depth repos; depth-1 repos placed in \"repos\" category\n", g.ownerDirName)
-				for i := range depth1 {
-					depth1[i].category = "repos"
-				}
-				// Build a fresh slice: appending depth1 onto depth2 would
-				// write into depth2's spare capacity.
-				resolvedRepos = make([]scannedRepo, 0, len(depth2)+len(depth1))
-				resolvedRepos = append(resolvedRepos, depth2...)
-				resolvedRepos = append(resolvedRepos, depth1...)
-			} else {
-				resolvedRepos = depth2
-			}
-			isFlat = false
-		}
+		depth1, depth2 := splitReposByDepth(odPath, g.repos)
+		resolvedRepos, isFlat := resolveOwnerRepos(g.ownerDirName, depth1, depth2)
 
 		layouts = append(layouts, ownerLayout{
 			ownerDirName: g.ownerDirName,
