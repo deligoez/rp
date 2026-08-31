@@ -158,20 +158,17 @@ func runBootstrapDryRun(m *manifest.Manifest, filteredRepos []manifest.RepoEntry
 			label := repoLabel(entry)
 			info, err := os.Stat(entry.LocalPath)
 			var action string
-			if err == nil {
-				if info.IsDir() {
-					if git.IsRepo(entry.LocalPath) {
-						action = "already exists — would skip"
-					} else {
-						action = ui.SymbolError() + " ERROR: directory exists but is not a git repo"
-					}
-				} else {
-					action = ui.SymbolError() + " ERROR: path exists and is not a directory"
-				}
-			} else if os.IsNotExist(err) {
+			switch {
+			case os.IsNotExist(err):
 				action = "would clone " + entry.CloneURL
-			} else {
+			case err != nil:
 				action = ui.SymbolError() + " ERROR: " + err.Error()
+			case !info.IsDir():
+				action = ui.SymbolError() + " ERROR: path exists and is not a directory"
+			case !git.IsRepo(entry.LocalPath):
+				action = ui.SymbolError() + " ERROR: directory exists but is not a git repo"
+			default:
+				action = "already exists — would skip"
 			}
 			fmt.Printf("  %s  %s\n", ui.PadRight(label, 24), action)
 		}
