@@ -120,7 +120,12 @@ func PrintAndExit(v interface{}) {
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		// In JSON mode the document IS the output; a caller handed a truncated
+		// one must not read the intended exit code as a successful result.
+		fmt.Fprintf(os.Stderr, "error: encoding JSON result: %v\n", err)
+		os.Exit(2)
+	}
 	os.Exit(exitCode)
 }
 
