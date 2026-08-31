@@ -6,7 +6,6 @@ import (
 
 	"github.com/deligoez/rp/internal/manifest"
 	"github.com/deligoez/rp/internal/output"
-	"github.com/deligoez/rp/internal/runner"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
 	"github.com/spf13/cobra"
@@ -222,24 +221,7 @@ var updateCmd = &cobra.Command{
 		if output.IsJSON() {
 			opts := worker.PoolOptions{Verb: "updating"}
 			results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (repoCommandResult, error) {
-				result := repoCommandResult{entry: entry}
-				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-					result.skipped = true
-					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-					return result, nil
-				}
-				for _, command := range entry.Update {
-					err := runner.RunCommands(entry.LocalPath, []string{command})
-					cr := commandOutcome{command: command}
-					if err != nil {
-						cr.failed = true
-						cr.errMsg = err.Error()
-						result.results = append(result.results, cr)
-						break
-					}
-					result.results = append(result.results, cr)
-				}
-				return result, nil
+				return runRepoCommands(entry, entry.Update), nil
 			})
 
 			resultMap := make(map[string]repoCommandResult, len(results))
@@ -338,24 +320,7 @@ var updateCmd = &cobra.Command{
 			targets,
 			Concurrency,
 			func(entry manifest.RepoEntry) (repoCommandResult, error) {
-				result := repoCommandResult{entry: entry}
-				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-					result.skipped = true
-					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-					return result, nil
-				}
-				for _, command := range entry.Update {
-					err := runner.RunCommands(entry.LocalPath, []string{command})
-					cr := commandOutcome{command: command}
-					if err != nil {
-						cr.failed = true
-						cr.errMsg = err.Error()
-						result.results = append(result.results, cr)
-						break
-					}
-					result.results = append(result.results, cr)
-				}
-				return result, nil
+				return runRepoCommands(entry, entry.Update), nil
 			},
 			func(n, total int, entry manifest.RepoEntry, res repoCommandResult, _ error) {
 				label := ui.PadRight(repoLabel(entry), 24)

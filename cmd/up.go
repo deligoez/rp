@@ -218,24 +218,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					Concurrency,
 					worker.PoolOptions{Verb: "installing"},
 					func(entry manifest.RepoEntry) (repoCommandResult, error) {
-						result := repoCommandResult{entry: entry}
-						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-							result.skipped = true
-							result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-							return result, nil
-						}
-						for _, command := range entry.Install {
-							err := runner.RunCommands(entry.LocalPath, []string{command})
-							cr := commandOutcome{command: command}
-							if err != nil {
-								cr.failed = true
-								cr.errMsg = err.Error()
-								result.results = append(result.results, cr)
-								break
-							}
-							result.results = append(result.results, cr)
-						}
-						return result, nil
+						return runRepoCommands(entry, entry.Install), nil
 					},
 				)
 
@@ -337,24 +320,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					Concurrency,
 					worker.PoolOptions{Verb: "updating"},
 					func(entry manifest.RepoEntry) (repoCommandResult, error) {
-						result := repoCommandResult{entry: entry}
-						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-							result.skipped = true
-							result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-							return result, nil
-						}
-						for _, command := range entry.Update {
-							err := runner.RunCommands(entry.LocalPath, []string{command})
-							cr := commandOutcome{command: command}
-							if err != nil {
-								cr.failed = true
-								cr.errMsg = err.Error()
-								result.results = append(result.results, cr)
-								break
-							}
-							result.results = append(result.results, cr)
-						}
-						return result, nil
+						return runRepoCommands(entry, entry.Update), nil
 					},
 				)
 
