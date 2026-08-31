@@ -56,6 +56,52 @@ func runUp(cmd *cobra.Command, args []string) error {
 func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 	owners := manifest.FilterOwners(m.Owners(), Filters)
 
+	boot := upHumanBootstrap(repos, owners)
+	sync := upHumanSync(repos, owners, boot.clonedSet)
+	inst := upHumanInstall(repos, owners, boot.clonedSet)
+	upd := upHumanUpdate(repos, owners, boot.clonedSet, boot.failedSet)
+
+	printUpHumanSummary(boot, sync, inst, upd)
+
+	if upDryRun {
+		os.Exit(0)
+	}
+	if code := upHumanExitCode(boot, sync, inst, upd); code != 0 {
+		os.Exit(code)
+	}
+	return nil
+}
+
+// upBootstrapOutcome is what the later phases need from bootstrap: which
+// repos it cloned, which it failed on, and the counts for the summary.
+type upBootstrapOutcome struct {
+	clonedSet map[string]bool
+	failedSet map[string]bool
+	cloned    int
+	existed   int
+	failed    int
+}
+
+// upSyncCounts holds the sync phase's summary numbers.
+type upSyncCounts struct {
+	pulled   int
+	upToDate int
+	skipped  int
+	failed   int
+}
+
+// upCommandCounts holds one command phase's summary numbers. Under --dry-run
+// the dry counts are reported instead of succeeded/failed.
+type upCommandCounts struct {
+	ran         bool
+	succeeded   int
+	failed      int
+	dryRepos    int
+	dryCommands int
+}
+
+// upHumanBootstrap clones what is missing and prints the bootstrap block.
+func upHumanBootstrap(repos []manifest.RepoEntry, owners []manifest.OwnerGroup) upBootstrapOutcome {
 	// ── Phase 1: Bootstrap ───────────────────────────────────────────────────
 	fmt.Println("== Bootstrap ==")
 
@@ -115,6 +161,18 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 	}
 	fmt.Println()
 
+	return upBootstrapOutcome{
+		clonedSet: clonedSet,
+		failedSet: failedSet,
+		cloned:    bsClonedCount,
+		existed:   bsExistedCount,
+		failed:    bsFailedCount,
+	}
+}
+
+// upHumanSync pulls what is clean and prints the sync block. Repos bootstrap
+// just cloned are already current and are reported as such.
+func upHumanSync(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clonedSet map[string]bool) upSyncCounts {
 	// ── Phase 2: Sync ────────────────────────────────────────────────────────
 	fmt.Println("== Sync ==")
 
@@ -167,6 +225,11 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		fmt.Println()
 	}
 
+	return upSyncCounts{pulled: syPulled, upToDate: syUpToDate, skipped: sySkipped, failed: syFailed}
+}
+
+// upHumanInstall runs install commands for the repos bootstrap just cloned.
+func upHumanInstall(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clonedSet map[string]bool) upCommandCounts {
 	// ── Phase 3: Install (only cloned repos) ─────────────────────────────────
 	var instSucceeded, instFailed int
 	var dryInstRepos, dryInstCommands int
@@ -265,6 +328,14 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 	}
 
+	return upCommandCounts{
+		ran: runInstallPhase, succeeded: instSucceeded, failed: instFailed,
+		dryRepos: dryInstRepos, dryCommands: dryInstCommands,
+	}
+}
+
+// upHumanUpdate runs update commands for the repos that already existed.
+func upHumanUpdate(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clonedSet, failedSet map[string]bool) upCommandCounts {
 	// ── Phase 4: Update (pre-existing repos only) ────────────────────────────
 	var updSucceeded, updFailed int
 	var dryUpdRepos, dryUpdCommands int
@@ -367,6 +438,20 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 	}
 
+	return upCommandCounts{
+		ran: runUpdatePhase, succeeded: updSucceeded, failed: updFailed,
+		dryRepos: dryUpdRepos, dryCommands: dryUpdCommands,
+	}
+}
+
+// printUpHumanSummary prints the closing summary block.
+func printUpHumanSummary(boot upBootstrapOutcome, sync upSyncCounts, inst, upd upCommandCounts) {
+	bsClonedCount, bsExistedCount, bsFailedCount := boot.cloned, boot.existed, boot.failed
+	syPulled, syUpToDate, sySkipped := sync.pulled, sync.upToDate, sync.skipped
+	runInstallPhase, dryInstRepos, dryInstCommands := inst.ran, inst.dryRepos, inst.dryCommands
+	instSucceeded, instFailed := inst.succeeded, inst.failed
+	runUpdatePhase, dryUpdRepos, dryUpdCommands := upd.ran, upd.dryRepos, upd.dryCommands
+	updSucceeded, updFailed := upd.succeeded, upd.failed
 	// ── Summary ──────────────────────────────────────────────────────────────
 	fmt.Println("-- Summary --")
 	fmt.Printf("%s, %s, %s\n",
@@ -391,33 +476,17 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 			fmt.Printf("update: %d succeeded, %d failed\n", updSucceeded, updFailed)
 		}
 	}
+}
 
-	if upDryRun {
-		os.Exit(0)
+// upHumanExitCode is the highest exit code across the four phases.
+func upHumanExitCode(boot upBootstrapOutcome, sync upSyncCounts, inst, upd upCommandCounts) int {
+	if boot.failed > 0 || sync.failed > 0 || inst.failed > 0 || upd.failed > 0 {
+		return 2
 	}
-
-	// Exit with highest code across phases.
-	exitCode := 0
-	if bsFailedCount > 0 {
-		exitCode = 2
+	if sync.skipped > 0 {
+		return 1
 	}
-	if syFailed > 0 && exitCode < 2 {
-		exitCode = 2
-	}
-	if sySkipped > 0 && exitCode < 1 {
-		exitCode = 1
-	}
-	if instFailed > 0 && exitCode < 2 {
-		exitCode = 2
-	}
-	if updFailed > 0 && exitCode < 2 {
-		exitCode = 2
-	}
-
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-	return nil
+	return 0
 }
 
 // ── JSON mode ────────────────────────────────────────────────────────────────
