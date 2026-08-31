@@ -166,10 +166,7 @@ func matchesDiscoverFilter(nameWithOwner string, filters []string) bool {
 func runDiscover(cmd *cobra.Command, args []string) error {
 	// Step 1: Verify gh CLI.
 	if err := ghAuthCheck(); err != nil {
-		if output.IsJSON() {
-			output.PrintErrorAndExit("discover", err)
-		}
-		return err
+		return discoverError(err)
 	}
 
 	// Step 2: Load manifest.
@@ -188,18 +185,12 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 	// Steps 3-4: Fetch user login and orgs.
 	currentUser, err := ghCurrentUser()
 	if err != nil {
-		if output.IsJSON() {
-			output.PrintErrorAndExit("discover", err)
-		}
-		return err
+		return discoverError(err)
 	}
 
 	orgs, err := ghListOrgs()
 	if err != nil {
-		if output.IsJSON() {
-			output.PrintErrorAndExit("discover", err)
-		}
-		return err
+		return discoverError(err)
 	}
 
 	// Build owner list: personal first, then orgs alphabetically.
@@ -207,36 +198,16 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 	owners := append([]string{currentUser}, orgs...)
 
 	// Step 5: Scan all owners sequentially.
-	var allRemote []ghRepo
-	for i, owner := range owners {
-		if !output.IsJSON() {
-			fmt.Fprintf(os.Stderr, "[%d/%d] scanning %s...\n", i+1, len(owners), owner)
-		}
-		repos, err := ghListRepos(owner)
-		if err != nil {
-			if output.IsJSON() {
-				output.PrintErrorAndExit("discover", err)
-			}
-			return err
-		}
-		allRemote = append(allRemote, repos...)
+	allRemote, err := scanOwnerRepos(owners)
+	if err != nil {
+		return discoverError(err)
 	}
 
 	totalRemote := countUniqueRepos(allRemote)
 
-	// Steps 6-8: Filter untracked.
+	// Steps 6-8: Filter untracked, then apply --filter.
 	untracked := filterUntracked(allRemote, manifestNames, discoverForks, discoverArchived)
-
-	// Step 9: Apply --filter.
-	if len(Filters) > 0 {
-		var filtered []ghRepo
-		for _, r := range untracked {
-			if matchesDiscoverFilter(r.NameWithOwner, Filters) {
-				filtered = append(filtered, r)
-			}
-		}
-		untracked = filtered
-	}
+	untracked = applyDiscoverFilter(untracked)
 
 	// Determine exit code.
 	exitCode := 0
@@ -355,4 +326,46 @@ func pluralOwners(n int) string {
 		return "owner"
 	}
 	return "owners"
+}
+
+// discoverError reports err under the discover command name: in JSON mode it
+// prints the error envelope and exits, otherwise it hands err back for the
+// human path.
+func discoverError(err error) error {
+	if output.IsJSON() {
+		output.PrintErrorAndExit("discover", err)
+	}
+	return err
+}
+
+// scanOwnerRepos lists every repo for each owner in turn, reporting progress
+// on stderr in human mode.
+func scanOwnerRepos(owners []string) ([]ghRepo, error) {
+	var all []ghRepo
+	for i, owner := range owners {
+		if !output.IsJSON() {
+			fmt.Fprintf(os.Stderr, "[%d/%d] scanning %s...\n", i+1, len(owners), owner)
+		}
+		repos, err := ghListRepos(owner)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, repos...)
+	}
+	return all, nil
+}
+
+// applyDiscoverFilter narrows repos with --filter. An empty filter list keeps
+// everything.
+func applyDiscoverFilter(repos []ghRepo) []ghRepo {
+	if len(Filters) == 0 {
+		return repos
+	}
+	var kept []ghRepo
+	for _, r := range repos {
+		if matchesDiscoverFilter(r.NameWithOwner, Filters) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }
