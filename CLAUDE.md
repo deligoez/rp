@@ -43,8 +43,40 @@ go test ./...
 go vet ./...
 
 # Quality gate (run after every change)
-go build ./... && go test ./... && go vet ./...
+go build ./... && go test ./... && golangci-lint run && ./scripts/deadcode.sh
 ```
+
+## Tooling beyond the gate
+
+`golangci-lint run` must report **0 issues** and `./scripts/deadcode.sh` must exit 0.
+Both run in CI. `golangci-lint` includes `govet`, so a separate `go vet` step is redundant.
+
+- **Pin the linter, and pin it to what you run locally.** CI installs
+  `golangci-lint@v2.13.2` with `go install`, not `golangci-lint-action` (the action is
+  versioned independently and a v6/config-v2 mismatch reads like a config error). A gate
+  whose version floats is a function of the tool, not of the code. Before bumping the pin,
+  run that version locally first — and check it supports the Go release `go-version: stable`
+  resolves to: v2.12.x panics on Go 1.27's stdlib inside staticcheck.
+- **`deadcode` is not redundant with `unused`.** `unused` skips exported identifiers by
+  design; `deadcode` builds a call graph and catches the exported helper nothing calls.
+  The gate uses `-test` (tests count as entry points), so it reports only genuinely dead
+  code. Running it *without* `-test` additionally lists test-only code — a useful review
+  signal, not a gate.
+- **`issues.uniq-by-line: false` is load-bearing.** `gocognit` and `funlen` both report on
+  a function's declaration line, and the default (`true`) shows only one finding per line —
+  so every `funlen` violation on a function that also trips `gocognit` is invisible.
+  `max-issues-per-linter`/`max-same-issues` are zeroed for the same reason: the defaults
+  cap output at 50 and 3 and hide how large a problem actually is.
+- **Complexity thresholds are `gocognit` 40, `funlen` 100 lines / 60 statements, `dupl` 150,
+  and tests are excluded from all four.** Test files are legitimately long and repetitive;
+  measuring them against production thresholds only pushes the tests toward being worse.
+- **`hugeParam`/`rangeValCopy` are set to 129 bytes, not disabled.** `manifest.RepoEntry` is
+  128 bytes and is passed by value everywhere; for a tool iterating tens of repos, pointers
+  would buy nothing measurable and invite aliasing bugs. Anything genuinely larger still gets
+  flagged.
+- **Do not add a `//nolint` to get the gate green.** Every current finding was refactored
+  away rather than suppressed, so the gate is at a true zero and the next violation is
+  visible the moment it appears.
 
 ## Commands
 
