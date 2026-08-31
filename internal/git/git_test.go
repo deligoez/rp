@@ -394,7 +394,9 @@ func TestStatus_DetachedHEAD(t *testing.T) {
 func TestQA_StatusUntrackedDirty(t *testing.T) {
 	dir := initRepoWithCommit(t)
 	// Add untracked file (not git-added)
-	os.WriteFile(filepath.Join(dir, "UNTRACKED.txt"), []byte("new"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "UNTRACKED.txt"), []byte("new"), 0o644); err != nil {
+		t.Fatalf("write UNTRACKED.txt: %v", err)
+	}
 
 	s, err := git.Status(dir)
 	if err != nil {
@@ -412,7 +414,9 @@ func TestQA_StatusUntrackedDirty(t *testing.T) {
 func TestQA_StatusStagedDirty(t *testing.T) {
 	dir := initRepoWithCommit(t)
 	// Modify and stage (but don't commit)
-	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("modified"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("modified"), 0o644); err != nil {
+		t.Fatalf("write f.txt: %v", err)
+	}
 	run(t, dir, "git", "add", "f.txt")
 
 	s, err := git.Status(dir)
