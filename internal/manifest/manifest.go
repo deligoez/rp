@@ -172,7 +172,9 @@ type rawRepo struct {
 
 // Load reads a manifest YAML file from the given path and returns a parsed Manifest.
 // Path resolution and validation are handled separately.
-func Load(path string) (*Manifest, error) {
+// parseManifestRoot reads the file and returns the top-level mapping node,
+// rejecting anything that is not a well-formed manifest document.
+func parseManifestRoot(path string) (*yaml.Node, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -210,25 +212,42 @@ func Load(path string) (*Manifest, error) {
 		)
 	}
 
-	// Scan top-level keys: check for duplicates, non-scalar keys, and reserved 'owners' key.
+	return root, nil
+}
+
+// checkTopLevelKeys rejects non-scalar keys, duplicates, and the removed
+// "owners" wrapper.
+func checkTopLevelKeys(root *yaml.Node) error {
 	seenKeys := make(map[string]bool)
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		keyNode := root.Content[i]
 		if keyNode.Kind != yaml.ScalarNode {
-			return nil, fmt.Errorf("manifest: top-level key at line %d must be a string", keyNode.Line)
+			return fmt.Errorf("manifest: top-level key at line %d must be a string", keyNode.Line)
 		}
 		if seenKeys[keyNode.Value] {
-			return nil, fmt.Errorf("manifest: duplicate key %q", keyNode.Value)
+			return fmt.Errorf("manifest: duplicate key %q", keyNode.Value)
 		}
 		seenKeys[keyNode.Value] = true
 	}
 
 	// Step 4: Check for legacy 'owners' key — short-circuit with migration hint.
 	if seenKeys["owners"] {
-		return nil, output.NewHintError(
+		return output.NewHintError(
 			fmt.Errorf("\"owners\" is no longer a valid manifest key"),
 			"Remove the \"owners:\" line and dedent owner blocks by one level.",
 		)
+	}
+
+	return nil
+}
+
+func Load(path string) (*Manifest, error) {
+	root, err := parseManifestRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkTopLevelKeys(root); err != nil {
+		return nil, err
 	}
 
 	// Step 5: Extract base_dir.
