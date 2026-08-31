@@ -86,6 +86,22 @@ func needsAttention(s git.RepoStatus) bool {
 	return false
 }
 
+// statusRepoLine is one repo's human-mode row plus the classification the
+// summary counts are derived from.
+type statusRepoLine struct {
+	label     string
+	symbol    string
+	details   string
+	notCloned bool
+	attention bool
+}
+
+// statusOwnerLines groups one owner's rows.
+type statusOwnerLines struct {
+	name  string
+	repos []statusRepoLine
+}
+
 func runStatus(cmd *cobra.Command, args []string) error {
 	// Apply no-color setting before any output.
 	ui.SetNoColor(NoColor)
@@ -98,240 +114,225 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Apply --filter flag: narrow down to matching owners/repos.
 	filteredOwners := manifest.FilterOwners(m.Owners(), Filters)
 
-	// labelWidth is the column width for the label field (for alignment).
-	// We compute the maximum label length across all repos.
-	const minLabelWidth = 24
-	labelWidth := minLabelWidth
-	for _, owner := range filteredOwners {
-		for _, entry := range owner.Repos {
-			if l := len(repoLabel(entry)); l > labelWidth {
-				labelWidth = l
-			}
-		}
-	}
+	ownerLines, jsonRepos := collectStatus(filteredOwners)
 
-	type repoResult struct {
-		label     string
-		symbol    string
-		details   string
-		notCloned bool
-		attention bool
-	}
-
-	type ownerResult struct {
-		name  string
-		repos []repoResult
-	}
-
-	var ownerResults []ownerResult
-
-	// For JSON path: collect per-repo JSON objects alongside human-mode data.
-	var jsonRepos []statusRepoJSON
-
-	countOK := 0
-	countAttention := 0
-	countNotCloned := 0
-
-	for _, owner := range filteredOwners {
-		var repos []repoResult
-
-		for _, entry := range owner.Repos {
-			label := repoLabel(entry)
-			var result repoResult
-			result.label = label
-
-			if !git.IsRepo(entry.LocalPath) {
-				result.symbol = ui.SymbolError()
-				result.details = "not cloned"
-				result.notCloned = true
-				countNotCloned++
-
-				jsonRepos = append(jsonRepos, statusRepoJSON{
-					Repo:      entry.Repo,
-					Owner:     entry.Owner,
-					Category:  entry.Category,
-					LocalPath: entry.LocalPath,
-					Cloned:    false,
-				})
-			} else {
-				s, err := git.Status(entry.LocalPath)
-				if err != nil {
-					// Treat git errors as needing attention.
-					result.symbol = ui.SymbolWarn()
-					result.details = fmt.Sprintf("error: %v", err)
-					result.attention = true
-					countAttention++
-
-					// Emit JSON entry with default git fields (cloned=true requires them).
-					zero := 0
-					f := false
-					jsonRepos = append(jsonRepos, statusRepoJSON{
-						Repo:        entry.Repo,
-						Owner:       entry.Owner,
-						Category:    entry.Category,
-						LocalPath:   entry.LocalPath,
-						Cloned:      true,
-						Branch:      "unknown",
-						Clean:       &f,
-						DirtyFiles:  &zero,
-						Ahead:       &zero,
-						Behind:      &zero,
-						HasUpstream: &f,
-					})
-				} else if needsAttention(s) {
-					result.symbol = ui.SymbolWarn()
-					result.details = statusDetails(s)
-					result.attention = true
-					countAttention++
-
-					jsonRepos = append(jsonRepos, makeStatusRepoJSON(entry, s))
-				} else {
-					result.symbol = ui.SymbolOK()
-					result.details = statusDetails(s)
-					countOK++
-
-					jsonRepos = append(jsonRepos, makeStatusRepoJSON(entry, s))
-				}
-			}
-
-			repos = append(repos, result)
-		}
-
-		ownerResults = append(ownerResults, ownerResult{name: owner.Name, repos: repos})
-	}
-
-	// JSON output path.
 	if output.IsJSON() {
-		// Apply --dirty / --behind / --ahead post-filters (AND logic).
-		filtered := make([]statusRepoJSON, 0, len(jsonRepos))
-		for _, r := range jsonRepos {
-			if statusDirty && (r.Clean == nil || *r.Clean) {
-				continue
-			}
-			if statusBehind && (r.Behind == nil || *r.Behind == 0) {
-				continue
-			}
-			if statusAhead && (r.Ahead == nil || *r.Ahead == 0) {
-				continue
-			}
-			filtered = append(filtered, r)
-		}
-
-		// Recompute summary counts from filtered set.
-		okCount := 0
-		attentionCount := 0
-		notClonedCount := 0
-		for _, r := range filtered {
-			if !r.Cloned {
-				notClonedCount++
-			} else if r.Clean != nil && *r.Clean &&
-				(r.Ahead == nil || *r.Ahead == 0) &&
-				(r.Behind == nil || *r.Behind == 0) {
-				okCount++
-			} else {
-				attentionCount++
-			}
-		}
-
-		exitCode := 0
-		if attentionCount > 0 || notClonedCount > 0 {
-			exitCode = 1
-		}
-
-		result := output.SuccessResult{
-			Command:  "status",
-			ExitCode: exitCode,
-			Summary: map[string]int{
-				"ok":         okCount,
-				"attention":  attentionCount,
-				"not_cloned": notClonedCount,
-				"total":      len(filtered),
-			},
-			Repos: filtered,
-		}
-		output.PrintAndExit(result)
+		printStatusJSON(jsonRepos)
 		return nil
 	}
 
-	// Human output path (unchanged).
+	printStatusHuman(ownerLines, jsonRepos, statusLabelWidth(filteredOwners))
+	return nil
+}
 
-	// Apply --dirty / --behind / --ahead post-filters to human output.
-	// Re-filter ownerResults to only include matching repos.
-	if statusDirty || statusBehind || statusAhead {
-		// We need to cross-reference ownerResults with jsonRepos for filtering.
-		// Build a set of repo names that pass the post-filter.
-		passing := make(map[string]bool, len(jsonRepos))
-		for _, r := range jsonRepos {
-			if statusDirty && (r.Clean == nil || *r.Clean) {
-				continue
-			}
-			if statusBehind && (r.Behind == nil || *r.Behind == 0) {
-				continue
-			}
-			if statusAhead && (r.Ahead == nil || *r.Ahead == 0) {
-				continue
-			}
-			passing[r.Repo] = true
-		}
-
-		// Rebuild counts from scratch.
-		countOK = 0
-		countAttention = 0
-		countNotCloned = 0
-
-		// Rebuild ownerResults using jsonRepos (same order) as the source of truth.
-		var filteredOwnerResults []ownerResult
-		jsonIdx := 0
-		for _, or_ := range ownerResults {
-			var filteredRepos []repoResult
-			for _, r := range or_.repos {
-				jr := jsonRepos[jsonIdx]
-				jsonIdx++
-				if !passing[jr.Repo] {
-					continue
-				}
-				filteredRepos = append(filteredRepos, r)
-				// Update summary counts.
-				if r.notCloned {
-					countNotCloned++
-				} else if r.attention {
-					countAttention++
-				} else {
-					countOK++
-				}
-			}
-			if len(filteredRepos) > 0 {
-				filteredOwnerResults = append(filteredOwnerResults, ownerResult{name: or_.name, repos: filteredRepos})
+// statusLabelWidth is the column width for the label field, wide enough for
+// the longest label and never below the minimum.
+func statusLabelWidth(owners []manifest.OwnerGroup) int {
+	const minLabelWidth = 24
+	width := minLabelWidth
+	for _, owner := range owners {
+		for _, entry := range owner.Repos {
+			if l := len(repoLabel(entry)); l > width {
+				width = l
 			}
 		}
-		ownerResults = filteredOwnerResults
+	}
+	return width
+}
+
+// collectStatus inspects every repo once and returns both output modes' data.
+// The two results are in the same order, repo for repo, so the human path can
+// pair a row with its JSON entry by index.
+func collectStatus(owners []manifest.OwnerGroup) ([]statusOwnerLines, []statusRepoJSON) {
+	var ownerLines []statusOwnerLines
+	var jsonRepos []statusRepoJSON
+
+	for _, owner := range owners {
+		repos := make([]statusRepoLine, 0, len(owner.Repos))
+		for _, entry := range owner.Repos {
+			line, jr := evalStatusRepo(entry)
+			repos = append(repos, line)
+			jsonRepos = append(jsonRepos, jr)
+		}
+		ownerLines = append(ownerLines, statusOwnerLines{name: owner.Name, repos: repos})
 	}
 
-	// Print output grouped by owner.
-	for i, owner := range ownerResults {
+	return ownerLines, jsonRepos
+}
+
+// evalStatusRepo classifies one repo for both output modes.
+func evalStatusRepo(entry manifest.RepoEntry) (statusRepoLine, statusRepoJSON) {
+	line := statusRepoLine{label: repoLabel(entry)}
+
+	if !git.IsRepo(entry.LocalPath) {
+		line.symbol = ui.SymbolError()
+		line.details = "not cloned"
+		line.notCloned = true
+		return line, statusRepoJSON{
+			Repo:      entry.Repo,
+			Owner:     entry.Owner,
+			Category:  entry.Category,
+			LocalPath: entry.LocalPath,
+			Cloned:    false,
+		}
+	}
+
+	s, err := git.Status(entry.LocalPath)
+	if err != nil {
+		// Treat git errors as needing attention. The JSON entry still carries
+		// the git fields, because cloned=true requires them.
+		line.symbol = ui.SymbolWarn()
+		line.details = fmt.Sprintf("error: %v", err)
+		line.attention = true
+
+		zero := 0
+		f := false
+		return line, statusRepoJSON{
+			Repo:        entry.Repo,
+			Owner:       entry.Owner,
+			Category:    entry.Category,
+			LocalPath:   entry.LocalPath,
+			Cloned:      true,
+			Branch:      "unknown",
+			Clean:       &f,
+			DirtyFiles:  &zero,
+			Ahead:       &zero,
+			Behind:      &zero,
+			HasUpstream: &f,
+		}
+	}
+
+	line.details = statusDetails(s)
+	if needsAttention(s) {
+		line.symbol = ui.SymbolWarn()
+		line.attention = true
+	} else {
+		line.symbol = ui.SymbolOK()
+	}
+	return line, makeStatusRepoJSON(entry, s)
+}
+
+// statusPassesFilters reports whether a repo survives --dirty / --behind /
+// --ahead. The flags are ANDed; with none set every repo passes.
+func statusPassesFilters(r statusRepoJSON) bool {
+	if statusDirty && (r.Clean == nil || *r.Clean) {
+		return false
+	}
+	if statusBehind && (r.Behind == nil || *r.Behind == 0) {
+		return false
+	}
+	if statusAhead && (r.Ahead == nil || *r.Ahead == 0) {
+		return false
+	}
+	return true
+}
+
+// countStatusJSON derives the summary counts from JSON entries.
+func countStatusJSON(repos []statusRepoJSON) (ok, attention, notCloned int) {
+	for _, r := range repos {
+		switch {
+		case !r.Cloned:
+			notCloned++
+		case r.Clean != nil && *r.Clean &&
+			(r.Ahead == nil || *r.Ahead == 0) &&
+			(r.Behind == nil || *r.Behind == 0):
+			ok++
+		default:
+			attention++
+		}
+	}
+	return ok, attention, notCloned
+}
+
+// printStatusJSON writes the status result and exits.
+func printStatusJSON(jsonRepos []statusRepoJSON) {
+	filtered := make([]statusRepoJSON, 0, len(jsonRepos))
+	for _, r := range jsonRepos {
+		if statusPassesFilters(r) {
+			filtered = append(filtered, r)
+		}
+	}
+
+	okCount, attentionCount, notClonedCount := countStatusJSON(filtered)
+
+	exitCode := 0
+	if attentionCount > 0 || notClonedCount > 0 {
+		exitCode = 1
+	}
+
+	output.PrintAndExit(output.SuccessResult{
+		Command:  "status",
+		ExitCode: exitCode,
+		Summary: map[string]int{
+			"ok":         okCount,
+			"attention":  attentionCount,
+			"not_cloned": notClonedCount,
+			"total":      len(filtered),
+		},
+		Repos: filtered,
+	})
+}
+
+// filterStatusLines drops rows whose JSON entry fails the post-filters.
+// jsonRepos is in the same order as the rows, so they pair by index.
+func filterStatusLines(ownerLines []statusOwnerLines, jsonRepos []statusRepoJSON) []statusOwnerLines {
+	var kept []statusOwnerLines
+	idx := 0
+	for _, ol := range ownerLines {
+		var repos []statusRepoLine
+		for _, r := range ol.repos {
+			jr := jsonRepos[idx]
+			idx++
+			if statusPassesFilters(jr) {
+				repos = append(repos, r)
+			}
+		}
+		if len(repos) > 0 {
+			kept = append(kept, statusOwnerLines{name: ol.name, repos: repos})
+		}
+	}
+	return kept
+}
+
+// printStatusHuman renders the owner blocks and the summary, then exits 1 when
+// any repo needs attention or is not cloned.
+func printStatusHuman(ownerLines []statusOwnerLines, jsonRepos []statusRepoJSON, labelWidth int) {
+	if statusDirty || statusBehind || statusAhead {
+		ownerLines = filterStatusLines(ownerLines, jsonRepos)
+	}
+
+	var countOK, countAttention, countNotCloned int
+	for _, ol := range ownerLines {
+		for _, r := range ol.repos {
+			switch {
+			case r.notCloned:
+				countNotCloned++
+			case r.attention:
+				countAttention++
+			default:
+				countOK++
+			}
+		}
+	}
+
+	for i, owner := range ownerLines {
 		if i > 0 {
 			fmt.Println()
 		}
 		fmt.Println(owner.name)
 		for _, r := range owner.repos {
-			paddedLabel := ui.PadRight(r.label, labelWidth)
-			fmt.Printf("  %s  %s %s\n", paddedLabel, r.symbol, r.details)
+			fmt.Printf("  %s  %s %s\n", ui.PadRight(r.label, labelWidth), r.symbol, r.details)
 		}
 	}
 
-	// Summary.
 	fmt.Println()
-	summaryParts := []string{
+	fmt.Println(ui.SummaryLine(
 		fmt.Sprintf("%d OK, %d need attention, %d not cloned", countOK, countAttention, countNotCloned),
-	}
-	fmt.Println(ui.SummaryLine(summaryParts...))
+	))
 
-	// Exit 1 if any repo needs attention or is not cloned.
 	if countAttention > 0 || countNotCloned > 0 {
 		os.Exit(1)
 	}
-
-	return nil
 }
 
 // makeStatusRepoJSON builds a statusRepoJSON for a cloned repo with full git status.
