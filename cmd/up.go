@@ -45,7 +45,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	repos := manifest.FilterRepos(m.Repos(), Filters)
 
 	if output.IsJSON() {
-		return runUpJSON(m, repos)
+		return runUpJSON(repos)
 	}
 	return runUpHuman(m, repos)
 }
@@ -424,7 +424,7 @@ func upHumanExitCode(boot upBootstrapOutcome, sync upSyncCounts, inst, upd upCom
 
 // ── JSON mode ────────────────────────────────────────────────────────────────
 
-func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
+func runUpJSON(repos []manifest.RepoEntry) error {
 	result := output.UpResult{
 		Command: "up",
 		DryRun:  upDryRun,
