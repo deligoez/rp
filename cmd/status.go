@@ -60,14 +60,14 @@ func statusDetails(s git.RepoStatus) string {
 	sb.WriteString(s.Branch)
 
 	if !s.Clean {
-		sb.WriteString(fmt.Sprintf(" ~%d dirty", s.DirtyFiles))
+		fmt.Fprintf(&sb, " ~%d dirty", s.DirtyFiles)
 	}
 	if s.HasUpstream {
 		if s.Ahead > 0 {
-			sb.WriteString(fmt.Sprintf(" +%d ahead", s.Ahead))
+			fmt.Fprintf(&sb, " +%d ahead", s.Ahead)
 		}
 		if s.Behind > 0 {
-			sb.WriteString(fmt.Sprintf(" -%d behind", s.Behind))
+			fmt.Fprintf(&sb, " -%d behind", s.Behind)
 		}
 	}
 
