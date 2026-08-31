@@ -89,6 +89,31 @@ func isValidName(name string) bool {
 
 // validate checks all manifest rules and returns the first error found.
 func (m *Manifest) validate() error {
+	if err := m.validateShape(); err != nil {
+		return err
+	}
+
+	seen := make(map[string]bool)
+
+	for _, owner := range m.owners {
+		// Rule 4: owner names must be valid directory names.
+		if !isValidName(owner.Name) {
+			return fmt.Errorf("manifest: invalid owner name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name)
+		}
+
+		for _, entry := range owner.Repos {
+			if err := validateRepoEntry(entry, owner.Name, seen); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateShape checks the manifest-level rules: it has a base directory, and
+// it declares at least one repo somewhere.
+func (m *Manifest) validateShape() error {
 	// Rule 1: base_dir must be present and non-empty.
 	if m.BaseDir == "" {
 		return output.NewHintError(
@@ -109,57 +134,52 @@ func (m *Manifest) validate() error {
 		)
 	}
 
-	seen := make(map[string]bool)
+	return nil
+}
 
-	for _, owner := range m.owners {
-		// Rule 4: owner names must be valid directory names.
-		if !isValidName(owner.Name) {
-			return fmt.Errorf("manifest: invalid owner name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name)
-		}
-
-		for _, entry := range owner.Repos {
-			// Rule 4: category names must be valid directory names (skip for flat repos).
-			if entry.Category != "" && !isValidName(entry.Category) {
-				return fmt.Errorf("manifest: owner %q has invalid category name %q (must be non-empty, no '/', no '..', no null bytes)", owner.Name, entry.Category)
-			}
-
-			// Rule 2: repo field must match {owner}/{name}.
-			if !repoPattern.MatchString(entry.Repo) {
-				return output.NewHintError(
-					fmt.Errorf("manifest: repo %q does not match required pattern {owner}/{name} (alphanumeric, hyphens, underscores, dots only)", entry.Repo),
-					"repo must be owner/name, e.g. deligoez/tp",
-				)
-			}
-
-			// Rule 3: no duplicate repos across entire manifest.
-			if seen[entry.Repo] {
-				return output.NewHintError(
-					fmt.Errorf("manifest: duplicate repo %q", entry.Repo),
-					fmt.Sprintf("remove duplicate entry for %s in manifest", entry.Repo),
-				)
-			}
-			seen[entry.Repo] = true
-
-			// Rule 7: install and update entries must be non-empty strings.
-			for i, cmd := range entry.Install {
-				if cmd == "" {
-					return output.NewHintError(
-						fmt.Errorf("manifest: repo %q has empty install entry at index %d", entry.Repo, i),
-						"install entries must be non-empty command strings",
-					)
-				}
-			}
-			for i, cmd := range entry.Update {
-				if cmd == "" {
-					return output.NewHintError(
-						fmt.Errorf("manifest: repo %q has empty update entry at index %d", entry.Repo, i),
-						"update entries must be non-empty command strings",
-					)
-				}
-			}
-		}
+// validateRepoEntry checks the per-repo rules. seen carries the repo names
+// already accepted, so duplicates are caught across the whole manifest.
+func validateRepoEntry(entry RepoEntry, ownerName string, seen map[string]bool) error {
+	// Rule 4: category names must be valid directory names (skip for flat repos).
+	if entry.Category != "" && !isValidName(entry.Category) {
+		return fmt.Errorf("manifest: owner %q has invalid category name %q (must be non-empty, no '/', no '..', no null bytes)", ownerName, entry.Category)
 	}
 
+	// Rule 2: repo field must match {owner}/{name}.
+	if !repoPattern.MatchString(entry.Repo) {
+		return output.NewHintError(
+			fmt.Errorf("manifest: repo %q does not match required pattern {owner}/{name} (alphanumeric, hyphens, underscores, dots only)", entry.Repo),
+			"repo must be owner/name, e.g. deligoez/tp",
+		)
+	}
+
+	// Rule 3: no duplicate repos across entire manifest.
+	if seen[entry.Repo] {
+		return output.NewHintError(
+			fmt.Errorf("manifest: duplicate repo %q", entry.Repo),
+			fmt.Sprintf("remove duplicate entry for %s in manifest", entry.Repo),
+		)
+	}
+	seen[entry.Repo] = true
+
+	// Rule 7: install and update entries must be non-empty strings.
+	if err := validateCommandList(entry.Repo, "install", entry.Install); err != nil {
+		return err
+	}
+	return validateCommandList(entry.Repo, "update", entry.Update)
+}
+
+// validateCommandList rejects an empty command string, naming which list and
+// which position it came from.
+func validateCommandList(repo, kind string, commands []string) error {
+	for i, cmd := range commands {
+		if cmd == "" {
+			return output.NewHintError(
+				fmt.Errorf("manifest: repo %q has empty %s entry at index %d", repo, kind, i),
+				fmt.Sprintf("%s entries must be non-empty command strings", kind),
+			)
+		}
+	}
 	return nil
 }
 
