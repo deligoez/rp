@@ -67,9 +67,17 @@ Both run in CI. `golangci-lint` includes `govet`, so a separate `go vet` step is
   so every `funlen` violation on a function that also trips `gocognit` is invisible.
   `max-issues-per-linter`/`max-same-issues` are zeroed for the same reason: the defaults
   cap output at 50 and 3 and hide how large a problem actually is.
-- **Complexity thresholds are `gocognit` 40, `funlen` 100 lines / 60 statements, `dupl` 150,
+- **Complexity thresholds are `gocognit` 20, `funlen` 100 lines / 60 statements, `dupl` 150,
   and tests are excluded from all four.** Test files are legitimately long and repetitive;
   measuring them against production thresholds only pushes the tests toward being worse.
+- **The `gocognit` line is derived, not copied.** Production functions have a median of 5,
+  a p95 of 17, and a max of 20, so 20 is the tightest line the code actually holds at zero
+  suppressions — stricter than golangci-lint's default of 30. Going lower would cut into the
+  dense 14-17 band, which is ordinary code rather than debt. Re-measure before changing it:
+  `golangci-lint run --enable-only gocognit` with `min-complexity: 1` prints the whole
+  distribution.
+- **`gocyclo` is deliberately not in the gate.** Measured max is 13 against a would-be
+  threshold of 20+, so it would block nothing that `gocognit` does not already catch.
 - **`hugeParam`/`rangeValCopy` are set to 129 bytes, not disabled.** `manifest.RepoEntry` is
   128 bytes and is passed by value everywhere; for a tool iterating tens of repos, pointers
   would buy nothing measurable and invite aliasing bugs. Anything genuinely larger still gets
