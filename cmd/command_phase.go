@@ -233,7 +233,8 @@ func printCommandDryRunJSON(spec commandCmdSpec, scanned []dryRunTarget) {
 	jsonRepos := make([]jsonRepoEntry, 0, len(scanned))
 	repos, commands, skipped := 0, 0, 0
 
-	for _, target := range scanned {
+	for i := range scanned {
+		target := &scanned[i]
 		if target.missing {
 			skipped++
 			jsonRepos = append(jsonRepos, jsonRepoEntry{
@@ -276,11 +277,11 @@ func printCommandDryRunJSON(spec commandCmdSpec, scanned []dryRunTarget) {
 func printCommandDryRunHuman(spec commandCmdSpec, m *manifest.Manifest, scanned []dryRunTarget) {
 	inTargets := make(map[string]bool, len(scanned))
 	present := 0
-	for _, t := range scanned {
-		if t.missing {
+	for i := range scanned {
+		if scanned[i].missing {
 			continue
 		}
-		inTargets[t.entry.Repo] = true
+		inTargets[scanned[i].entry.Repo] = true
 		present++
 	}
 
