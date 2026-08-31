@@ -1,0 +1,68 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - misspell
+    - unconvert
+    - unparam
+    - gocognit
+    - funlen
+    - dupl
+    - nolintlint
+
+  settings:
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      settings:
+        # manifest.RepoEntry is 128 bytes and is passed by value throughout.
+        # For a tool that iterates tens of repos this is the right trade:
+        # pointers would buy nothing measurable and invite aliasing bugs.
+        # Keep both checks armed for anything genuinely larger.
+        hugeParam:
+          sizeThreshold: 129
+        rangeValCopy:
+          sizeThreshold: 129
+
+    gocognit:
+      min-complexity: 40
+
+    funlen:
+      lines: 100
+      statements: 60
+
+    dupl:
+      threshold: 150
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+  exclusions:
+    rules:
+      # Table-driven tests and integration fixtures are legitimately long and
+      # repetitive; measuring them with production thresholds only pushes the
+      # tests toward being worse.
+      - path: _test\.go
+        linters: [gocognit, funlen, dupl, unparam]
+
+issues:
+  # Report everything: the defaults cap each linter at 50 findings and each
+  # message at 3, which silently hides the size of the problem.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # gocognit and funlen both report on the function's declaration line, so with
+  # the default (true) a funlen finding is invisible on any function that also
+  # trips gocognit.
+  uniq-by-line: false
+
+formatters:
+  enable:
+    - gofmt
