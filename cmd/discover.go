@@ -175,10 +175,7 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 	// Step 2: Load manifest.
 	m, err := manifest.Load(ManifestPath)
 	if err != nil {
-		if output.IsJSON() {
-			output.PrintErrorAndExit("discover", err)
-		}
-		return fmt.Errorf("loading manifest: %w", err)
+		return manifestError("discover", err)
 	}
 
 	// Collect manifest repo names.
