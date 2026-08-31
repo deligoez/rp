@@ -246,50 +246,90 @@ func buildAndPrintSyncJSON(results []worker.Result[syncResult], repos []manifest
 
 // processSyncRepo evaluates a single repo entry and returns the appropriate syncResult.
 // Evaluation order follows spec §3.3 (first match wins).
+// syncCloneMissing clones a repo that is not on disk yet, creating its parent
+// directories first.
+func syncCloneMissing(entry manifest.RepoEntry, label string, dryRun bool) syncResult {
+	path, repo := entry.LocalPath, entry.Repo
+
+	if dryRun {
+		return syncResult{
+			label:    label,
+			status:   "would clone",
+			exitCode: 0,
+			repo:     repo,
+			action:   syncActionWouldClone,
+		}
+	}
+
+	failed := func(msg string) syncResult {
+		return syncResult{
+			label:    label,
+			status:   ui.SymbolError() + " FAILED: " + msg,
+			exitCode: 2,
+			repo:     repo,
+			action:   syncActionFailed,
+			errMsg:   msg,
+		}
+	}
+
+	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+		return failed("could not create parent dirs: " + mkErr.Error())
+	}
+	if cloneErr := git.Clone(entry.CloneURL, path); cloneErr != nil {
+		return failed("git clone: " + cloneErr.Error())
+	}
+
+	return syncResult{
+		label:    label,
+		status:   ui.SymbolOK() + " cloned",
+		exitCode: 0,
+		repo:     repo,
+		action:   syncActionCloned,
+	}
+}
+
+// syncSkipUnsafe reports the skip result for a repo that must not be pulled:
+// uncommitted work, or commits that are not pushed yet. ok is false when the
+// repo is safe to pull. Dirty takes precedence over unpushed.
+func syncSkipUnsafe(s git.RepoStatus, label, repo string, dryRun bool) (syncResult, bool) {
+	skip := func(detail string, reason syncSkipReason, fill func(*syncResult)) syncResult {
+		r := syncResult{label: label, repo: repo, skipReason: reason}
+		if dryRun {
+			r.status = "would skip (" + detail + ")"
+			r.exitCode = 0
+			r.action = syncActionWouldSkip
+		} else {
+			r.status = ui.SymbolWarn() + " " + detail
+			r.exitCode = 1
+			r.action = syncActionSkipped
+		}
+		fill(&r)
+		return r
+	}
+
+	if s.DirtyFiles > 0 {
+		detail := "dirty - " + ui.Plural(s.DirtyFiles, "changed file")
+		return skip(detail, syncSkipDirty, func(r *syncResult) { r.dirtyFiles = s.DirtyFiles }), true
+	}
+
+	if s.HasUpstream && s.Ahead > 0 {
+		detail := ui.Plural(s.Ahead, "unpushed commit") + " (" + s.Branch + ")"
+		return skip(detail, syncSkipUnpushed, func(r *syncResult) {
+			r.ahead = s.Ahead
+			r.branch = s.Branch
+		}), true
+	}
+
+	return syncResult{}, false
+}
+
 func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncResult {
 	path := entry.LocalPath
 	repo := entry.Repo
 
 	// 1. Not cloned → clone (create parent dirs first).
 	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-		if dryRun {
-			return syncResult{
-				label:    label,
-				status:   "would clone",
-				exitCode: 0,
-				repo:     repo,
-				action:   syncActionWouldClone,
-			}
-		}
-		if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
-			msg := "could not create parent dirs: " + mkErr.Error()
-			return syncResult{
-				label:    label,
-				status:   ui.SymbolError() + " FAILED: " + msg,
-				exitCode: 2,
-				repo:     repo,
-				action:   syncActionFailed,
-				errMsg:   msg,
-			}
-		}
-		if cloneErr := git.Clone(entry.CloneURL, path); cloneErr != nil {
-			msg := "git clone: " + cloneErr.Error()
-			return syncResult{
-				label:    label,
-				status:   ui.SymbolError() + " FAILED: " + msg,
-				exitCode: 2,
-				repo:     repo,
-				action:   syncActionFailed,
-				errMsg:   msg,
-			}
-		}
-		return syncResult{
-			label:    label,
-			status:   ui.SymbolOK() + " cloned",
-			exitCode: 0,
-			repo:     repo,
-			action:   syncActionCloned,
-		}
+		return syncCloneMissing(entry, label, dryRun)
 	}
 
 	// 2. Path exists but is NOT a git repo.
@@ -320,56 +360,9 @@ func processSyncRepo(entry manifest.RepoEntry, label string, dryRun bool) syncRe
 		}
 	}
 
-	// 3. Dirty → skip, warn (dirty takes precedence over unpushed).
-	if repoStatus.DirtyFiles > 0 {
-		detail := "dirty - " + ui.Plural(repoStatus.DirtyFiles, "changed file")
-		if dryRun {
-			return syncResult{
-				label:      label,
-				status:     "would skip (" + detail + ")",
-				exitCode:   0,
-				repo:       repo,
-				action:     syncActionWouldSkip,
-				skipReason: syncSkipDirty,
-				dirtyFiles: repoStatus.DirtyFiles,
-			}
-		}
-		return syncResult{
-			label:      label,
-			status:     ui.SymbolWarn() + " " + detail,
-			exitCode:   1,
-			repo:       repo,
-			action:     syncActionSkipped,
-			skipReason: syncSkipDirty,
-			dirtyFiles: repoStatus.DirtyFiles,
-		}
-	}
-
-	// 4. Unpushed commits (only when HasUpstream && Ahead > 0) → skip, warn.
-	if repoStatus.HasUpstream && repoStatus.Ahead > 0 {
-		detail := ui.Plural(repoStatus.Ahead, "unpushed commit") + " (" + repoStatus.Branch + ")"
-		if dryRun {
-			return syncResult{
-				label:      label,
-				status:     "would skip (" + detail + ")",
-				exitCode:   0,
-				repo:       repo,
-				action:     syncActionWouldSkip,
-				skipReason: syncSkipUnpushed,
-				ahead:      repoStatus.Ahead,
-				branch:     repoStatus.Branch,
-			}
-		}
-		return syncResult{
-			label:      label,
-			status:     ui.SymbolWarn() + " " + detail,
-			exitCode:   1,
-			repo:       repo,
-			action:     syncActionSkipped,
-			skipReason: syncSkipUnpushed,
-			ahead:      repoStatus.Ahead,
-			branch:     repoStatus.Branch,
-		}
+	// 3-4. Dirty or unpushed → skip, warn (dirty wins over unpushed).
+	if skip, ok := syncSkipUnsafe(repoStatus, label, repo, dryRun); ok {
+		return skip
 	}
 
 	// 5. Clean → git pull --ff-only.
