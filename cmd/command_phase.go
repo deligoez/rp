@@ -100,83 +100,85 @@ func runCommandCmd(spec commandCmdSpec, args []string) error {
 func commandTargets(spec commandCmdSpec, m *manifest.Manifest, args []string) ([]manifest.RepoEntry, bool) {
 	allRepos := m.Repos()
 
-	// Determine target repos based on optional filter argument.
 	var targets []manifest.RepoEntry
-
 	if len(args) == 1 {
-		// Positional argument takes precedence over --filter; warn if both provided.
-		if len(Filters) > 0 {
-			fmt.Fprintf(os.Stderr, "warning: positional repo argument takes precedence over --filter; --filter ignored\n")
-		}
-		filter := args[0]
-		found := false
-		for _, r := range allRepos {
-			if r.Repo == filter {
-				found = true
-				if len(spec.commandsOf(r)) == 0 {
-					if output.IsJSON() {
-						output.PrintAndExit(output.SuccessResult{
-							Command:  spec.name,
-							ExitCode: 0,
-							Summary: map[string]int{
-								"succeeded": 0,
-								"failed":    0,
-								"skipped":   0,
-								"total":     0,
-								"commands":  0,
-							},
-							Repos: []interface{}{},
-						})
-					}
-					fmt.Printf("no %s commands configured for %s\n", spec.name, filter)
-					return nil, false
-				}
-				targets = append(targets, r)
-				break
-			}
-		}
-		if !found {
-			notFoundErr := output.NewHintError(
-				fmt.Errorf("repo %q not found in manifest", filter),
-				"check repo name, available: rp list --json",
-			)
-			if output.IsJSON() {
-				output.PrintErrorAndExit(spec.name, notFoundErr)
-			}
-			fmt.Fprintf(os.Stderr, "%s\n", output.FormatHumanError(notFoundErr))
-			os.Exit(2)
+		var ok bool
+		if targets, ok = commandTargetFromArg(spec, allRepos, args[0]); !ok {
+			return nil, false
 		}
 	} else {
-		// No positional arg: collect all repos that define commands, then apply --filter.
-		var withCommands []manifest.RepoEntry
-		for _, r := range allRepos {
-			if len(spec.commandsOf(r)) > 0 {
-				withCommands = append(withCommands, r)
-			}
-		}
-		targets = manifest.FilterRepos(withCommands, Filters)
+		targets = commandTargetsFromFilter(spec, allRepos)
 	}
 
 	if len(targets) == 0 {
-		if output.IsJSON() {
-			output.PrintAndExit(output.SuccessResult{
-				Command:  spec.name,
-				ExitCode: 0,
-				Summary: map[string]int{
-					"succeeded": 0,
-					"failed":    0,
-					"skipped":   0,
-					"total":     0,
-					"commands":  0,
-				},
-				Repos: []interface{}{},
-			})
-		}
-		fmt.Printf("no repos with %s commands defined\n", spec.name)
+		reportNoCommandWork(spec, fmt.Sprintf("no repos with %s commands defined\n", spec.name))
 		return nil, false
 	}
 
 	return targets, true
+}
+
+// commandTargetFromArg resolves the positional repo argument, which takes
+// precedence over --filter. An unknown repo exits 2; a known repo with no
+// commands is reported as nothing to do (ok=false).
+func commandTargetFromArg(spec commandCmdSpec, allRepos []manifest.RepoEntry, name string) ([]manifest.RepoEntry, bool) {
+	if len(Filters) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: positional repo argument takes precedence over --filter; --filter ignored\n")
+	}
+
+	for _, r := range allRepos {
+		if r.Repo != name {
+			continue
+		}
+		if len(spec.commandsOf(r)) == 0 {
+			reportNoCommandWork(spec, fmt.Sprintf("no %s commands configured for %s\n", spec.name, name))
+			return nil, false
+		}
+		return []manifest.RepoEntry{r}, true
+	}
+
+	notFoundErr := output.NewHintError(
+		fmt.Errorf("repo %q not found in manifest", name),
+		"check repo name, available: rp list --json",
+	)
+	if output.IsJSON() {
+		output.PrintErrorAndExit(spec.name, notFoundErr)
+	}
+	fmt.Fprintf(os.Stderr, "%s\n", output.FormatHumanError(notFoundErr))
+	os.Exit(2)
+	return nil, false
+}
+
+// commandTargetsFromFilter selects every repo that defines commands, narrowed
+// by --filter.
+func commandTargetsFromFilter(spec commandCmdSpec, allRepos []manifest.RepoEntry) []manifest.RepoEntry {
+	var withCommands []manifest.RepoEntry
+	for _, r := range allRepos {
+		if len(spec.commandsOf(r)) > 0 {
+			withCommands = append(withCommands, r)
+		}
+	}
+	return manifest.FilterRepos(withCommands, Filters)
+}
+
+// reportNoCommandWork reports a run with nothing to do: JSON prints the empty
+// envelope and exits, the human path prints msg and returns to the caller.
+func reportNoCommandWork(spec commandCmdSpec, msg string) {
+	if output.IsJSON() {
+		output.PrintAndExit(output.SuccessResult{
+			Command:  spec.name,
+			ExitCode: 0,
+			Summary: map[string]int{
+				"succeeded": 0,
+				"failed":    0,
+				"skipped":   0,
+				"total":     0,
+				"commands":  0,
+			},
+			Repos: []interface{}{},
+		})
+	}
+	fmt.Print(msg)
 }
 
 // printCommandDryRun lists the commands each target would run, then exits.
