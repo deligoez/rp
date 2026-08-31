@@ -21,7 +21,8 @@ func SetNoColor(v bool) {
 }
 
 // styled returns s wrapped in the given lipgloss style, unless noColor is set.
-func styled(s string, style lipgloss.Style) string {
+// The style is taken by pointer because lipgloss.Style is a 500+ byte value.
+func styled(s string, style *lipgloss.Style) string {
 	if noColor {
 		return s
 	}
@@ -36,9 +37,9 @@ var (
 
 // Status symbols.
 var (
-	SymbolOK    = func() string { return styled("OK", styleOK) }
-	SymbolWarn  = func() string { return styled("!!", styleWarn) }
-	SymbolError = func() string { return styled("XX", styleErr) }
+	SymbolOK    = func() string { return styled("OK", &styleOK) }
+	SymbolWarn  = func() string { return styled("!!", &styleWarn) }
+	SymbolError = func() string { return styled("XX", &styleErr) }
 )
 
 // Plural returns "<count> <word>" with a trailing "s" when count != 1.
