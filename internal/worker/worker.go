@@ -17,13 +17,6 @@ type Result[T any] struct {
 	Err   error
 }
 
-// Pool runs fn for each item in items with the given concurrency.
-// Results are returned in the same order as items.
-// Errors in individual workers do not stop other workers.
-func Pool[T any, R any](items []T, concurrency int, fn func(T) (R, error)) []Result[R] {
-	return PoolWithProgress(items, concurrency, PoolOptions{}, fn)
-}
-
 // PoolOptions controls optional behaviour of PoolWithProgress.
 type PoolOptions struct {
 	// Verb is the present-participle word shown in the progress line, e.g.
