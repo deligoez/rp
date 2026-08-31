@@ -182,7 +182,43 @@ func reportNoCommandWork(spec commandCmdSpec, msg string) {
 }
 
 // printCommandDryRun lists the commands each target would run, then exits.
+// dryRunTarget is one target and whether it is on disk. Kept as one ordered
+// slice so the JSON repos array preserves the target order, missing repos
+// included, exactly as a single pass would produce it.
+type dryRunTarget struct {
+	entry   manifest.RepoEntry
+	missing bool
+}
+
 func printCommandDryRun(spec commandCmdSpec, m *manifest.Manifest, targets []manifest.RepoEntry) error {
+	scanned := commandDryRunTargets(targets)
+
+	if output.IsJSON() {
+		printCommandDryRunJSON(spec, scanned)
+	}
+
+	printCommandDryRunHuman(spec, m, scanned)
+	return nil
+}
+
+// commandDryRunTargets marks which targets are on disk, warning once on stderr
+// for each one that is not. Both output modes need the same split, and the
+// warning belongs to the scan rather than to either renderer.
+func commandDryRunTargets(targets []manifest.RepoEntry) []dryRunTarget {
+	scanned := make([]dryRunTarget, 0, len(targets))
+	for _, target := range targets {
+		_, err := os.Stat(target.LocalPath)
+		missing := os.IsNotExist(err)
+		if missing {
+			fmt.Fprintf(os.Stderr, "warning: %s not found on disk, skipping\n", target.LocalPath)
+		}
+		scanned = append(scanned, dryRunTarget{entry: target, missing: missing})
+	}
+	return scanned
+}
+
+// printCommandDryRunJSON writes the dry-run result and exits.
+func printCommandDryRunJSON(spec commandCmdSpec, scanned []dryRunTarget) {
 	type jsonCommandEntry struct {
 		Command string `json:"command"`
 		Status  string `json:"status"`
@@ -194,84 +230,74 @@ func printCommandDryRun(spec commandCmdSpec, m *manifest.Manifest, targets []man
 		Commands []jsonCommandEntry `json:"commands,omitempty"`
 	}
 
-	jsonRepos := make([]jsonRepoEntry, 0, len(targets))
-	dryRepos := 0
-	dryCommands := 0
-	drySkipped := 0
+	jsonRepos := make([]jsonRepoEntry, 0, len(scanned))
+	repos, commands, skipped := 0, 0, 0
 
-	for _, target := range targets {
-		if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "warning: %s not found on disk, skipping\n", target.LocalPath)
-			drySkipped++
-			if output.IsJSON() {
-				jsonRepos = append(jsonRepos, jsonRepoEntry{
-					Repo:   target.Repo,
-					Status: "skipped",
-					Reason: "not_on_disk",
-				})
-			}
+	for _, target := range scanned {
+		if target.missing {
+			skipped++
+			jsonRepos = append(jsonRepos, jsonRepoEntry{
+				Repo:   target.entry.Repo,
+				Status: "skipped",
+				Reason: "not_on_disk",
+			})
 			continue
 		}
 
-		dryRepos++
-		if output.IsJSON() {
-			cmds := make([]jsonCommandEntry, 0, len(spec.commandsOf(target)))
-			for _, command := range spec.commandsOf(target) {
-				dryCommands++
-				cmds = append(cmds, jsonCommandEntry{Command: command, Status: "would_run"})
-			}
-			jsonRepos = append(jsonRepos, jsonRepoEntry{
-				Repo:     target.Repo,
-				Status:   "ok",
-				Commands: cmds,
-			})
+		repos++
+		list := spec.commandsOf(target.entry)
+		cmds := make([]jsonCommandEntry, 0, len(list))
+		for _, command := range list {
+			commands++
+			cmds = append(cmds, jsonCommandEntry{Command: command, Status: "would_run"})
 		}
-	}
-
-	if output.IsJSON() {
-		output.PrintAndExit(output.SuccessResult{
-			Command:  spec.name,
-			ExitCode: 0,
-			DryRun:   true,
-			Summary: map[string]int{
-				"repos":    dryRepos,
-				"commands": dryCommands,
-				"skipped":  drySkipped,
-			},
-			Repos: jsonRepos,
+		jsonRepos = append(jsonRepos, jsonRepoEntry{
+			Repo:     target.entry.Repo,
+			Status:   "ok",
+			Commands: cmds,
 		})
 	}
 
-	// Human dry-run output: group by owner, same as normal output.
+	output.PrintAndExit(output.SuccessResult{
+		Command:  spec.name,
+		ExitCode: 0,
+		DryRun:   true,
+		Summary: map[string]int{
+			"repos":    repos,
+			"commands": commands,
+			"skipped":  skipped,
+		},
+		Repos: jsonRepos,
+	})
+}
+
+// printCommandDryRunHuman lists what each on-disk target would run, grouped by
+// owner in manifest order.
+func printCommandDryRunHuman(spec commandCmdSpec, m *manifest.Manifest, scanned []dryRunTarget) {
+	inTargets := make(map[string]bool, len(scanned))
+	present := 0
+	for _, t := range scanned {
+		if t.missing {
+			continue
+		}
+		inTargets[t.entry.Repo] = true
+		present++
+	}
+
+	commands := 0
 	for _, ownerGroup := range m.Owners() {
 		ownerPrinted := false
 		for _, entry := range ownerGroup.Repos {
-			// Only print targets.
-			inTargets := false
-			for _, t := range targets {
-				if t.Repo == entry.Repo {
-					inTargets = true
-					break
-				}
-			}
-			if !inTargets {
+			if !inTargets[entry.Repo] {
 				continue
 			}
-
-			if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-				// Already printed warning above; skip here.
-				continue
-			}
-
 			if !ownerPrinted {
 				fmt.Println(ownerGroup.Name)
 				ownerPrinted = true
 			}
-
-			label := repoLabel(entry)
-			paddedLabel := ui.PadRight(label, 24)
+			paddedLabel := ui.PadRight(repoLabel(entry), 24)
 			for _, command := range spec.commandsOf(entry) {
-				dryCommands++
+				commands++
 				fmt.Printf("  %s would run: %s\n", paddedLabel, command)
 			}
 		}
@@ -279,10 +305,9 @@ func printCommandDryRun(spec commandCmdSpec, m *manifest.Manifest, targets []man
 
 	fmt.Println()
 	fmt.Printf("-- Summary --\n%s, %s\n",
-		ui.Plural(dryRepos, "repo"),
-		ui.Plural(dryCommands, "command"),
+		ui.Plural(present, "repo"),
+		ui.Plural(commands, "command"),
 	)
-	return nil
 }
 
 // printCommandJSON runs every target's commands and prints the ordered JSON
