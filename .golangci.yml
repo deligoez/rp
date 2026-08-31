@@ -30,8 +30,13 @@ linters:
         rangeValCopy:
           sizeThreshold: 129
 
+    # 20 is where this codebase actually sits: production functions have a
+    # median of 5 and a p95 of 17, and nothing exceeds 20. It is stricter than
+    # golangci-lint's default of 30 and holds at zero suppressions, so the next
+    # function that crosses the line is genuinely new debt. Going lower would
+    # cut into the dense 14-17 band, which is ordinary code, not debt.
     gocognit:
-      min-complexity: 40
+      min-complexity: 20
 
     funlen:
       lines: 100
