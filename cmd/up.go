@@ -8,7 +8,6 @@ import (
 
 	"github.com/deligoez/rp/internal/manifest"
 	"github.com/deligoez/rp/internal/output"
-	"github.com/deligoez/rp/internal/runner"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
 )
@@ -431,6 +430,37 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		DryRun:  upDryRun,
 	}
 
+	clonedSet, failedSet := upJSONBootstrap(&result, repos)
+	upJSONSync(&result, repos, clonedSet)
+
+	result.Install = upJSONCommandPhase(upCommandPhase{
+		verb:       "installing",
+		enabled:    !upNoInstall,
+		commandsOf: func(r manifest.RepoEntry) []string { return r.Install },
+		isTarget:   func(r manifest.RepoEntry) bool { return clonedSet[r.Repo] },
+	}, repos)
+
+	result.Update = upJSONCommandPhase(upCommandPhase{
+		verb:       "updating",
+		enabled:    !upNoUpdate,
+		commandsOf: func(r manifest.RepoEntry) []string { return r.Update },
+		isTarget:   func(r manifest.RepoEntry) bool { return !clonedSet[r.Repo] && !failedSet[r.Repo] },
+	}, repos)
+
+	// ── Compute exit code ────────────────────────────────────────────────────
+	if upDryRun {
+		result.ExitCode = 0
+	} else {
+		result.ExitCode = upExitCode(result)
+	}
+
+	output.PrintAndExit(result)
+	return nil
+}
+
+// upJSONBootstrap fills result.Bootstrap and reports which repos were cloned
+// and which failed, for the phases that follow.
+func upJSONBootstrap(result *output.UpResult, repos []manifest.RepoEntry) (clonedSet, failedSet map[string]bool) {
 	// ── Phase 1: Bootstrap ───────────────────────────────────────────────────
 	var bootstrapWorkerResults []worker.Result[bootstrapResult]
 
@@ -459,8 +489,8 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		)
 	}
 
-	clonedSet := make(map[string]bool)
-	failedSet := make(map[string]bool)
+	clonedSet = make(map[string]bool)
+	failedSet = make(map[string]bool)
 	{
 		var nCloned, nExisted, nFailed int
 		bsRepos := make([]bootstrapRepoJSON, 0, len(bootstrapWorkerResults))
@@ -505,6 +535,11 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 	}
 
+	return clonedSet, failedSet
+}
+
+// upJSONSync fills result.Sync.
+func upJSONSync(result *output.UpResult, repos []manifest.RepoEntry, clonedSet map[string]bool) {
 	// ── Phase 2: Sync ────────────────────────────────────────────────────────
 	syncWorkerResults := worker.PoolWithProgress(
 		repos,
@@ -594,323 +629,6 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 	}
 
-	// ── Phase 3: Install (cloned repos only) ─────────────────────────────────
-	type jsonCmdEntry struct {
-		Command string `json:"command"`
-		Status  string `json:"status"`
-		Error   string `json:"error,omitempty"`
-	}
-	type jsonRepoEntry struct {
-		Repo     string         `json:"repo"`
-		Status   string         `json:"status"`
-		Reason   string         `json:"reason,omitempty"`
-		Commands []jsonCmdEntry `json:"commands,omitempty"`
-	}
-
-	runInstallPhase := !upNoInstall
-
-	if runInstallPhase {
-		var installTargets []manifest.RepoEntry
-		for _, r := range repos {
-			if len(r.Install) > 0 && clonedSet[r.Repo] {
-				installTargets = append(installTargets, r)
-			}
-		}
-
-		if upDryRun {
-			if len(installTargets) > 0 {
-				var dryRepos, dryCommands, drySkipped int
-				instRepos := make([]jsonRepoEntry, 0, len(installTargets))
-
-				for _, target := range installTargets {
-					if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
-						drySkipped++
-						instRepos = append(instRepos, jsonRepoEntry{
-							Repo:   target.Repo,
-							Status: "skipped",
-							Reason: "not_on_disk",
-						})
-						continue
-					}
-					cmds := make([]jsonCmdEntry, 0, len(target.Install))
-					for _, command := range target.Install {
-						dryCommands++
-						cmds = append(cmds, jsonCmdEntry{Command: command, Status: "would_run"})
-					}
-					instRepos = append(instRepos, jsonRepoEntry{
-						Repo:     target.Repo,
-						Status:   "ok",
-						Commands: cmds,
-					})
-					dryRepos++
-				}
-
-				result.Install = &output.SubResult{
-					Summary: map[string]int{
-						"repos":    dryRepos,
-						"commands": dryCommands,
-						"skipped":  drySkipped,
-					},
-					Repos: instRepos,
-				}
-			} else {
-				result.Install = &output.SubResult{
-					Summary: map[string]int{"succeeded": 0, "skipped": 0, "failed": 0, "total": 0, "commands": 0},
-					Repos:   []interface{}{},
-				}
-			}
-		} else if len(installTargets) > 0 {
-			instWorkerResults := worker.PoolWithProgress(
-				installTargets,
-				Concurrency,
-				worker.PoolOptions{Verb: "installing"},
-				func(entry manifest.RepoEntry) (repoCommandResult, error) {
-					res := repoCommandResult{entry: entry}
-					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-						res.skipped = true
-						res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-						return res, nil
-					}
-					for _, command := range entry.Install {
-						err := runner.RunCommands(entry.LocalPath, []string{command})
-						cr := commandOutcome{command: command}
-						if err != nil {
-							cr.failed = true
-							cr.errMsg = err.Error()
-							res.results = append(res.results, cr)
-							break
-						}
-						res.results = append(res.results, cr)
-					}
-					return res, nil
-				},
-			)
-
-			instMap := make(map[string]repoCommandResult, len(instWorkerResults))
-			for _, r := range instWorkerResults {
-				instMap[r.Value.entry.Repo] = r.Value
-			}
-
-			var instSucceeded, instFailed, instSkipped, instCommands int
-			instRepos := make([]jsonRepoEntry, 0, len(installTargets))
-
-			for _, target := range installTargets {
-				res, ok := instMap[target.Repo]
-				if !ok {
-					continue
-				}
-				if res.skipped {
-					instSkipped++
-					instRepos = append(instRepos, jsonRepoEntry{
-						Repo:   target.Repo,
-						Status: "skipped",
-						Reason: "not_on_disk",
-					})
-					continue
-				}
-				repoFailed := false
-				var cmds []jsonCmdEntry
-				for _, cr := range res.results {
-					instCommands++
-					e := jsonCmdEntry{Command: cr.command}
-					if cr.failed {
-						e.Status = "failed"
-						e.Error = cr.errMsg
-						repoFailed = true
-					} else {
-						e.Status = "ok"
-					}
-					cmds = append(cmds, e)
-				}
-				repoStatus := "ok"
-				if repoFailed {
-					repoStatus = "failed"
-					instFailed++
-				} else {
-					instSucceeded++
-				}
-				instRepos = append(instRepos, jsonRepoEntry{
-					Repo:     target.Repo,
-					Status:   repoStatus,
-					Commands: cmds,
-				})
-			}
-
-			result.Install = &output.SubResult{
-				Summary: map[string]int{
-					"succeeded": instSucceeded,
-					"failed":    instFailed,
-					"skipped":   instSkipped,
-					"total":     len(installTargets),
-					"commands":  instCommands,
-				},
-				Repos: instRepos,
-			}
-		} else {
-			result.Install = &output.SubResult{
-				Summary: map[string]int{"succeeded": 0, "skipped": 0, "failed": 0, "total": 0, "commands": 0},
-				Repos:   []interface{}{},
-			}
-		}
-	}
-
-	// ── Phase 4: Update (pre-existing repos only) ────────────────────────────
-	runUpdatePhase := !upNoUpdate
-
-	if runUpdatePhase {
-		var updateTargets []manifest.RepoEntry
-		for _, r := range repos {
-			if len(r.Update) > 0 && !clonedSet[r.Repo] && !failedSet[r.Repo] {
-				updateTargets = append(updateTargets, r)
-			}
-		}
-
-		if upDryRun {
-			if len(updateTargets) > 0 {
-				var dryRepos, dryCommands, drySkipped int
-				updRepos := make([]jsonRepoEntry, 0, len(updateTargets))
-
-				for _, target := range updateTargets {
-					if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
-						drySkipped++
-						updRepos = append(updRepos, jsonRepoEntry{
-							Repo:   target.Repo,
-							Status: "skipped",
-							Reason: "not_on_disk",
-						})
-						continue
-					}
-					cmds := make([]jsonCmdEntry, 0, len(target.Update))
-					for _, command := range target.Update {
-						dryCommands++
-						cmds = append(cmds, jsonCmdEntry{Command: command, Status: "would_run"})
-					}
-					updRepos = append(updRepos, jsonRepoEntry{
-						Repo:     target.Repo,
-						Status:   "ok",
-						Commands: cmds,
-					})
-					dryRepos++
-				}
-
-				result.Update = &output.SubResult{
-					Summary: map[string]int{
-						"repos":    dryRepos,
-						"commands": dryCommands,
-						"skipped":  drySkipped,
-					},
-					Repos: updRepos,
-				}
-			} else {
-				result.Update = &output.SubResult{
-					Summary: map[string]int{"succeeded": 0, "skipped": 0, "failed": 0, "total": 0, "commands": 0},
-					Repos:   []interface{}{},
-				}
-			}
-		} else if len(updateTargets) > 0 {
-			updWorkerResults := worker.PoolWithProgress(
-				updateTargets,
-				Concurrency,
-				worker.PoolOptions{Verb: "updating"},
-				func(entry manifest.RepoEntry) (repoCommandResult, error) {
-					res := repoCommandResult{entry: entry}
-					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-						res.skipped = true
-						res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
-						return res, nil
-					}
-					for _, command := range entry.Update {
-						err := runner.RunCommands(entry.LocalPath, []string{command})
-						cr := commandOutcome{command: command}
-						if err != nil {
-							cr.failed = true
-							cr.errMsg = err.Error()
-							res.results = append(res.results, cr)
-							break
-						}
-						res.results = append(res.results, cr)
-					}
-					return res, nil
-				},
-			)
-
-			updMap := make(map[string]repoCommandResult, len(updWorkerResults))
-			for _, r := range updWorkerResults {
-				updMap[r.Value.entry.Repo] = r.Value
-			}
-
-			var updSucceeded, updFailed, updSkipped, updCommands int
-			updRepos := make([]jsonRepoEntry, 0, len(updateTargets))
-
-			for _, target := range updateTargets {
-				res, ok := updMap[target.Repo]
-				if !ok {
-					continue
-				}
-				if res.skipped {
-					updSkipped++
-					updRepos = append(updRepos, jsonRepoEntry{
-						Repo:   target.Repo,
-						Status: "skipped",
-						Reason: "not_on_disk",
-					})
-					continue
-				}
-				repoFailed := false
-				var cmds []jsonCmdEntry
-				for _, cr := range res.results {
-					updCommands++
-					e := jsonCmdEntry{Command: cr.command}
-					if cr.failed {
-						e.Status = "failed"
-						e.Error = cr.errMsg
-						repoFailed = true
-					} else {
-						e.Status = "ok"
-					}
-					cmds = append(cmds, e)
-				}
-				repoStatus := "ok"
-				if repoFailed {
-					repoStatus = "failed"
-					updFailed++
-				} else {
-					updSucceeded++
-				}
-				updRepos = append(updRepos, jsonRepoEntry{
-					Repo:     target.Repo,
-					Status:   repoStatus,
-					Commands: cmds,
-				})
-			}
-
-			result.Update = &output.SubResult{
-				Summary: map[string]int{
-					"succeeded": updSucceeded,
-					"failed":    updFailed,
-					"skipped":   updSkipped,
-					"total":     len(updateTargets),
-					"commands":  updCommands,
-				},
-				Repos: updRepos,
-			}
-		} else {
-			result.Update = &output.SubResult{
-				Summary: map[string]int{"succeeded": 0, "skipped": 0, "failed": 0, "total": 0, "commands": 0},
-				Repos:   []interface{}{},
-			}
-		}
-	}
-
-	// ── Compute exit code ────────────────────────────────────────────────────
-	if upDryRun {
-		result.ExitCode = 0
-	} else {
-		result.ExitCode = upExitCode(result)
-	}
-
-	output.PrintAndExit(result)
-	return nil
 }
 
 // upExitCode returns the highest exit code across all phases of an UpResult.
@@ -953,4 +671,166 @@ func upExitCode(r output.UpResult) int {
 	}
 
 	return highest
+}
+
+// upJSONCmdEntry is one command's outcome in the up JSON result.
+type upJSONCmdEntry struct {
+	Command string `json:"command"`
+	Status  string `json:"status"`
+	Error   string `json:"error,omitempty"`
+}
+
+// upJSONRepoEntry is one repo's outcome in a command phase.
+type upJSONRepoEntry struct {
+	Repo     string           `json:"repo"`
+	Status   string           `json:"status"`
+	Reason   string           `json:"reason,omitempty"`
+	Commands []upJSONCmdEntry `json:"commands,omitempty"`
+}
+
+// emptyUpCommandResult is the sub-result for a phase with nothing to do.
+func emptyUpCommandResult() *output.SubResult {
+	return &output.SubResult{
+		Summary: map[string]int{"succeeded": 0, "skipped": 0, "failed": 0, "total": 0, "commands": 0},
+		Repos:   []interface{}{},
+	}
+}
+
+// upJSONCommandPhase runs one command phase and returns its sub-result. A
+// phase turned off with --no-install / --no-update returns nil, which
+// serializes as null.
+func upJSONCommandPhase(phase upCommandPhase, repos []manifest.RepoEntry) *output.SubResult {
+	if !phase.enabled {
+		return nil
+	}
+
+	var targets []manifest.RepoEntry
+	for _, r := range repos {
+		if len(phase.commandsOf(r)) > 0 && phase.isTarget(r) {
+			targets = append(targets, r)
+		}
+	}
+	if len(targets) == 0 {
+		return emptyUpCommandResult()
+	}
+
+	if upDryRun {
+		return upJSONCommandDryRun(phase, targets)
+	}
+	return upJSONCommandRun(phase, targets)
+}
+
+// upJSONCommandDryRun reports what each target would run.
+func upJSONCommandDryRun(phase upCommandPhase, targets []manifest.RepoEntry) *output.SubResult {
+	var dryRepos, dryCommands, drySkipped int
+	entries := make([]upJSONRepoEntry, 0, len(targets))
+
+	for _, target := range targets {
+		if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
+			drySkipped++
+			entries = append(entries, upJSONRepoEntry{
+				Repo:   target.Repo,
+				Status: "skipped",
+				Reason: "not_on_disk",
+			})
+			continue
+		}
+		commands := phase.commandsOf(target)
+		cmds := make([]upJSONCmdEntry, 0, len(commands))
+		for _, command := range commands {
+			dryCommands++
+			cmds = append(cmds, upJSONCmdEntry{Command: command, Status: "would_run"})
+		}
+		entries = append(entries, upJSONRepoEntry{
+			Repo:     target.Repo,
+			Status:   "ok",
+			Commands: cmds,
+		})
+		dryRepos++
+	}
+
+	return &output.SubResult{
+		Summary: map[string]int{
+			"repos":    dryRepos,
+			"commands": dryCommands,
+			"skipped":  drySkipped,
+		},
+		Repos: entries,
+	}
+}
+
+// upJSONCommandRun executes each target's commands and reports the outcome in
+// manifest order.
+func upJSONCommandRun(phase upCommandPhase, targets []manifest.RepoEntry) *output.SubResult {
+	workerResults := worker.PoolWithProgress(
+		targets,
+		Concurrency,
+		worker.PoolOptions{Verb: phase.verb},
+		func(entry manifest.RepoEntry) (repoCommandResult, error) {
+			return runRepoCommands(entry, phase.commandsOf(entry)), nil
+		},
+	)
+
+	resultMap := make(map[string]repoCommandResult, len(workerResults))
+	for _, r := range workerResults {
+		resultMap[r.Value.entry.Repo] = r.Value
+	}
+
+	var succeeded, failed, skipped, commandCount int
+	entries := make([]upJSONRepoEntry, 0, len(targets))
+
+	for _, target := range targets {
+		res, ok := resultMap[target.Repo]
+		if !ok {
+			continue
+		}
+		if res.skipped {
+			skipped++
+			entries = append(entries, upJSONRepoEntry{
+				Repo:   target.Repo,
+				Status: "skipped",
+				Reason: "not_on_disk",
+			})
+			continue
+		}
+
+		repoFailed := false
+		var cmds []upJSONCmdEntry
+		for _, cr := range res.results {
+			commandCount++
+			e := upJSONCmdEntry{Command: cr.command}
+			if cr.failed {
+				e.Status = "failed"
+				e.Error = cr.errMsg
+				repoFailed = true
+			} else {
+				e.Status = "ok"
+			}
+			cmds = append(cmds, e)
+		}
+
+		repoStatus := "ok"
+		if repoFailed {
+			repoStatus = "failed"
+			failed++
+		} else {
+			succeeded++
+		}
+		entries = append(entries, upJSONRepoEntry{
+			Repo:     target.Repo,
+			Status:   repoStatus,
+			Commands: cmds,
+		})
+	}
+
+	return &output.SubResult{
+		Summary: map[string]int{
+			"succeeded": succeeded,
+			"failed":    failed,
+			"skipped":   skipped,
+			"total":     len(targets),
+			"commands":  commandCount,
+		},
+		Repos: entries,
+	}
 }
