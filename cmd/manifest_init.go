@@ -295,7 +295,11 @@ func resolveLayouts(repos []scannedRepo) []ownerLayout {
 				for i := range depth1 {
 					depth1[i].category = "repos"
 				}
-				resolvedRepos = append(depth2, depth1...)
+				// Build a fresh slice: appending depth1 onto depth2 would
+				// write into depth2's spare capacity.
+				resolvedRepos = make([]scannedRepo, 0, len(depth2)+len(depth1))
+				resolvedRepos = append(resolvedRepos, depth2...)
+				resolvedRepos = append(resolvedRepos, depth1...)
 			} else {
 				resolvedRepos = depth2
 			}
