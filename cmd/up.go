@@ -217,8 +217,8 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					installTargets,
 					Concurrency,
 					worker.PoolOptions{Verb: "installing"},
-					func(entry manifest.RepoEntry) (installRepoResult, error) {
-						result := installRepoResult{entry: entry}
+					func(entry manifest.RepoEntry) (repoCommandResult, error) {
+						result := repoCommandResult{entry: entry}
 						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 							result.skipped = true
 							result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -226,7 +226,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 						}
 						for _, command := range entry.Install {
 							err := runner.RunCommands(entry.LocalPath, []string{command})
-							cr := installCommandResult{command: command}
+							cr := commandOutcome{command: command}
 							if err != nil {
 								cr.failed = true
 								cr.errMsg = err.Error()
@@ -239,7 +239,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					},
 				)
 
-				installMap := make(map[string]installRepoResult, len(installResults))
+				installMap := make(map[string]repoCommandResult, len(installResults))
 				for _, r := range installResults {
 					installMap[r.Value.entry.Repo] = r.Value
 				}
@@ -336,8 +336,8 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					updateTargets,
 					Concurrency,
 					worker.PoolOptions{Verb: "updating"},
-					func(entry manifest.RepoEntry) (updateRepoResult, error) {
-						result := updateRepoResult{entry: entry}
+					func(entry manifest.RepoEntry) (repoCommandResult, error) {
+						result := repoCommandResult{entry: entry}
 						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 							result.skipped = true
 							result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -345,7 +345,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 						}
 						for _, command := range entry.Update {
 							err := runner.RunCommands(entry.LocalPath, []string{command})
-							cr := updateCommandResult{command: command}
+							cr := commandOutcome{command: command}
 							if err != nil {
 								cr.failed = true
 								cr.errMsg = err.Error()
@@ -358,7 +358,7 @@ func runUpHuman(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					},
 				)
 
-				updateMap := make(map[string]updateRepoResult, len(updateResults))
+				updateMap := make(map[string]repoCommandResult, len(updateResults))
 				for _, r := range updateResults {
 					updateMap[r.Value.entry.Repo] = r.Value
 				}
@@ -695,8 +695,8 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 				installTargets,
 				Concurrency,
 				worker.PoolOptions{Verb: "installing"},
-				func(entry manifest.RepoEntry) (installRepoResult, error) {
-					res := installRepoResult{entry: entry}
+				func(entry manifest.RepoEntry) (repoCommandResult, error) {
+					res := repoCommandResult{entry: entry}
 					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 						res.skipped = true
 						res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -704,7 +704,7 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					}
 					for _, command := range entry.Install {
 						err := runner.RunCommands(entry.LocalPath, []string{command})
-						cr := installCommandResult{command: command}
+						cr := commandOutcome{command: command}
 						if err != nil {
 							cr.failed = true
 							cr.errMsg = err.Error()
@@ -717,7 +717,7 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 				},
 			)
 
-			instMap := make(map[string]installRepoResult, len(instWorkerResults))
+			instMap := make(map[string]repoCommandResult, len(instWorkerResults))
 			for _, r := range instWorkerResults {
 				instMap[r.Value.entry.Repo] = r.Value
 			}
@@ -843,8 +843,8 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 				updateTargets,
 				Concurrency,
 				worker.PoolOptions{Verb: "updating"},
-				func(entry manifest.RepoEntry) (updateRepoResult, error) {
-					res := updateRepoResult{entry: entry}
+				func(entry manifest.RepoEntry) (repoCommandResult, error) {
+					res := repoCommandResult{entry: entry}
 					if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 						res.skipped = true
 						res.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -852,7 +852,7 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 					}
 					for _, command := range entry.Update {
 						err := runner.RunCommands(entry.LocalPath, []string{command})
-						cr := updateCommandResult{command: command}
+						cr := commandOutcome{command: command}
 						if err != nil {
 							cr.failed = true
 							cr.errMsg = err.Error()
@@ -865,7 +865,7 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 				},
 			)
 
-			updMap := make(map[string]updateRepoResult, len(updWorkerResults))
+			updMap := make(map[string]repoCommandResult, len(updWorkerResults))
 			for _, r := range updWorkerResults {
 				updMap[r.Value.entry.Repo] = r.Value
 			}

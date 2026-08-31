@@ -12,21 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// updateRepoResult holds the outcome of running update for a single repo.
-type updateRepoResult struct {
-	entry   manifest.RepoEntry
-	skipped bool
-	skipMsg string
-	results []updateCommandResult
-}
-
-// updateCommandResult holds the outcome of a single command within a repo.
-type updateCommandResult struct {
-	command string
-	failed  bool
-	errMsg  string
-}
-
 var updateDryRun bool
 
 var updateCmd = &cobra.Command{
@@ -236,8 +221,8 @@ var updateCmd = &cobra.Command{
 		// JSON path: preserve ordered results (no live log).
 		if output.IsJSON() {
 			opts := worker.PoolOptions{Verb: "updating"}
-			results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (updateRepoResult, error) {
-				result := updateRepoResult{entry: entry}
+			results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (repoCommandResult, error) {
+				result := repoCommandResult{entry: entry}
 				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 					result.skipped = true
 					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -245,7 +230,7 @@ var updateCmd = &cobra.Command{
 				}
 				for _, command := range entry.Update {
 					err := runner.RunCommands(entry.LocalPath, []string{command})
-					cr := updateCommandResult{command: command}
+					cr := commandOutcome{command: command}
 					if err != nil {
 						cr.failed = true
 						cr.errMsg = err.Error()
@@ -257,7 +242,7 @@ var updateCmd = &cobra.Command{
 				return result, nil
 			})
 
-			resultMap := make(map[string]updateRepoResult, len(results))
+			resultMap := make(map[string]repoCommandResult, len(results))
 			for _, r := range results {
 				resultMap[r.Value.entry.Repo] = r.Value
 			}
@@ -352,8 +337,8 @@ var updateCmd = &cobra.Command{
 		_ = worker.PoolWithLiveLog(
 			targets,
 			Concurrency,
-			func(entry manifest.RepoEntry) (updateRepoResult, error) {
-				result := updateRepoResult{entry: entry}
+			func(entry manifest.RepoEntry) (repoCommandResult, error) {
+				result := repoCommandResult{entry: entry}
 				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
 					result.skipped = true
 					result.skipMsg = fmt.Sprintf("warning: %s not found on disk, skipping", entry.LocalPath)
@@ -361,7 +346,7 @@ var updateCmd = &cobra.Command{
 				}
 				for _, command := range entry.Update {
 					err := runner.RunCommands(entry.LocalPath, []string{command})
-					cr := updateCommandResult{command: command}
+					cr := commandOutcome{command: command}
 					if err != nil {
 						cr.failed = true
 						cr.errMsg = err.Error()
@@ -372,7 +357,7 @@ var updateCmd = &cobra.Command{
 				}
 				return result, nil
 			},
-			func(n, total int, entry manifest.RepoEntry, res updateRepoResult, _ error) {
+			func(n, total int, entry manifest.RepoEntry, res repoCommandResult, _ error) {
 				label := ui.PadRight(repoLabel(entry), 24)
 				if res.skipped {
 					skipped++
@@ -380,7 +365,7 @@ var updateCmd = &cobra.Command{
 					return
 				}
 				repoFailed := false
-				var failedCmd updateCommandResult
+				var failedCmd commandOutcome
 				for _, cr := range res.results {
 					totalCommands++
 					if cr.failed {
