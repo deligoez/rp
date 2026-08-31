@@ -350,30 +350,39 @@ func runUpCommandPhase(phase upCommandPhase, targets []manifest.RepoEntry, owner
 			if !ok {
 				continue
 			}
-			paddedLabel := ui.PadRight(repoLabel(entry), 24)
 			if !ownerPrinted {
 				fmt.Println(ownerGroup.Name)
 				ownerPrinted = true
 			}
-			if res.skipped {
-				fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
-				continue
-			}
-			repoFailed := false
-			for _, cr := range res.results {
-				if cr.failed {
-					fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
-					repoFailed = true
-				} else {
-					fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
-				}
-			}
-			if repoFailed {
-				counts.failed++
-			} else if len(res.results) > 0 {
-				counts.succeeded++
-			}
+			printUpRepoResult(&res, ui.PadRight(repoLabel(entry), 24), counts)
 		}
+	}
+}
+
+// printUpRepoResult prints one repo's command outcomes and folds them into the
+// phase counts. A repo counts once: failed if any command failed, succeeded if
+// it ran at least one and none failed.
+func printUpRepoResult(res *repoCommandResult, paddedLabel string, counts *upCommandCounts) {
+	if res.skipped {
+		fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
+		return
+	}
+
+	repoFailed := false
+	for _, cr := range res.results {
+		if cr.failed {
+			fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
+			repoFailed = true
+			continue
+		}
+		fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
+	}
+
+	switch {
+	case repoFailed:
+		counts.failed++
+	case len(res.results) > 0:
+		counts.succeeded++
 	}
 }
 
