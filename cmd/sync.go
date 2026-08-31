@@ -20,7 +20,7 @@ import (
 type syncAction int
 
 const (
-	syncActionPulled     syncAction = iota
+	syncActionPulled syncAction = iota
 	syncActionUpToDate
 	syncActionCloned
 	syncActionSkipped
@@ -35,7 +35,7 @@ const (
 type syncSkipReason int
 
 const (
-	syncSkipNone     syncSkipReason = iota
+	syncSkipNone syncSkipReason = iota
 	syncSkipDirty
 	syncSkipUnpushed
 	syncSkipDiverged
@@ -45,12 +45,12 @@ const (
 
 // syncResult holds the outcome of processing a single repo during sync.
 type syncResult struct {
-	label      string
-	status     string // human-readable display string
-	exitCode   int    // 0, 1, or 2
+	label    string
+	status   string // human-readable display string
+	exitCode int    // 0, 1, or 2
 
 	// Structured fields for JSON output — populated by processSyncRepo.
-	repo       string         // "owner/name"
+	repo       string // "owner/name"
 	action     syncAction
 	newCommits int            // action=pulled
 	skipReason syncSkipReason // action=skipped

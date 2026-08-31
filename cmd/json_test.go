@@ -396,7 +396,6 @@ owner:
 // Test 6: Archive JSON date — last_commit is RFC 3339
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Test 7: Error JSON — bad manifest path → error and hint fields present,
 // no summary/repos

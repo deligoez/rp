@@ -785,7 +785,6 @@ func runUpJSON(m *manifest.Manifest, repos []manifest.RepoEntry) error {
 		}
 	}
 
-
 	// ── Phase 4: Update (pre-existing repos only) ────────────────────────────
 	runUpdatePhase := !upNoUpdate
 

@@ -64,8 +64,8 @@ func TestFilterRepos_MultipleFilters(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"deligoez/tp":    true,
-		"deligoez/blog":  true,
+		"deligoez/tp":     true,
+		"deligoez/blog":   true,
 		"phonyland/cloud": true,
 	}
 	for _, r := range result {

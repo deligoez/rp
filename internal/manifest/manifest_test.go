@@ -240,7 +240,6 @@ base_dir: ` + baseDir + `
 	}
 }
 
-
 // Test 13: Repo with install — install: ["npm install"] → Install: ["npm install"]
 func TestRepoWithInstall(t *testing.T) {
 	baseDir := t.TempDir()

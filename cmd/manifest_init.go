@@ -545,8 +545,8 @@ func buildManifestInitResult(discovered []scannedRepo, skipped int, dryRun bool)
 
 	// Build a map from absPath -> resolved scannedRepo (with category and layout set).
 	type resolvedInfo struct {
-		repo     scannedRepo
-		isFlat   bool
+		repo   scannedRepo
+		isFlat bool
 	}
 	resolvedByPath := make(map[string]resolvedInfo)
 	for _, layout := range layouts {

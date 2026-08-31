@@ -29,9 +29,9 @@ func styled(s string, style lipgloss.Style) string {
 }
 
 var (
-	styleOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))  // green
-	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))  // yellow
-	styleErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))  // red
+	styleOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
+	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
+	styleErr  = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
 )
 
 // Status symbols.

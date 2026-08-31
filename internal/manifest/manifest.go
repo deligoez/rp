@@ -33,6 +33,7 @@ func expandTilde(path string) (string, error) {
 //   - Categorized archive (isFlat=false, isArchive=true): {baseDir}/{owner}/archive/{repoName}
 //   - Flat (isFlat=true, isArchive=false):              {baseDir}/{owner}/{repoName}
 //   - Flat archive (isFlat=true, isArchive=true):       {baseDir}/{owner}/archive/{repoName}
+//
 // resolvePath computes the absolute local path for a repo entry.
 //
 // Rules:

@@ -18,15 +18,15 @@ var bootstrapDryRun bool
 
 // bootstrapResult holds the outcome of processing a single repo during bootstrap.
 type bootstrapResult struct {
-	Entry   manifest.RepoEntry
-	Status  bootstrapStatus
-	ErrMsg  string
+	Entry  manifest.RepoEntry
+	Status bootstrapStatus
+	ErrMsg string
 }
 
 type bootstrapStatus int
 
 const (
-	bsCloned        bootstrapStatus = iota
+	bsCloned bootstrapStatus = iota
 	bsAlreadyExists
 	bsFailed
 	bsWouldClone
@@ -53,6 +53,7 @@ type bootstrapSummaryJSON struct {
 //   - archive entries: "archive/{repo_name}"
 //   - flat owners:     "{repo_name}"
 //   - categorized:     "{category}/{repo_name}"
+//
 // repoLabel returns the display label for a repo entry:
 //   - flat owners:     "{repo_name}"
 //   - categorized:     "{category}/{repo_name}"
