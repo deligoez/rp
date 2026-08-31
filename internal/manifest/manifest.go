@@ -292,91 +292,102 @@ func Load(path string) (*Manifest, error) {
 // parseOwnerNode parses a single owner's value node into an OwnerGroup.
 // A SequenceNode means flat (repos listed directly), a MappingNode means categorized.
 func parseOwnerNode(ownerName string, node *yaml.Node) (OwnerGroup, error) {
-	group := OwnerGroup{Name: ownerName}
-
 	switch node.Kind {
 	case yaml.SequenceNode:
-		// Flat owner: repos listed directly as a sequence.
-		group.IsFlat = true
-		// Check for legacy deps: key at yaml.Node level before decoding.
-		for _, item := range node.Content {
-			if item.Kind == yaml.MappingNode {
-				if err := checkForDepsKey(item); err != nil {
-					return group, err
-				}
-			}
-		}
-		var rawRepos []rawRepo
-		if err := node.Decode(&rawRepos); err != nil {
-			return group, fmt.Errorf("flat owner must be a list of repo entries: %w", err)
-		}
-		if len(rawRepos) == 0 {
-			return group, output.NewHintError(
-				fmt.Errorf("owner %q has an empty repo list", ownerName),
-				"add at least one repo entry, or remove the owner",
-			)
-		}
-		for _, r := range rawRepos {
-			entry := RepoEntry{
-				Repo:     r.Repo,
-				Owner:    ownerName,
-				Category: "",
-				CloneURL: "git@github.com:" + r.Repo + ".git",
-				Install:  r.Install,
-				Update:   r.Update,
-			}
-			group.Repos = append(group.Repos, entry)
-		}
-
+		return parseFlatOwner(ownerName, node)
 	case yaml.MappingNode:
-		// Categorized owner: keys are category names.
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			keyNode := node.Content[i]
-			valNode := node.Content[i+1]
-			key := keyNode.Value
-
-			// Check for legacy deps: key at yaml.Node level.
-			if valNode.Kind == yaml.SequenceNode {
-				for _, item := range valNode.Content {
-					if item.Kind == yaml.MappingNode {
-						if err := checkForDepsKey(item); err != nil {
-							return group, err
-						}
-					}
-				}
-			}
-
-			var rawRepos []rawRepo
-			if err := valNode.Decode(&rawRepos); err != nil {
-				return group, fmt.Errorf("category %q must be a list of repo entries: %w", key, err)
-			}
-			if len(rawRepos) == 0 {
-				return group, output.NewHintError(
-					fmt.Errorf("category %q has an empty repo list", key),
-					"add at least one repo to category, or remove it",
-				)
-			}
-			for _, r := range rawRepos {
-				entry := RepoEntry{
-					Repo:     r.Repo,
-					Owner:    ownerName,
-					Category: key,
-					CloneURL: "git@github.com:" + r.Repo + ".git",
-					Install:  r.Install,
-					Update:   r.Update,
-				}
-				group.Repos = append(group.Repos, entry)
-			}
-		}
-
+		return parseCategorizedOwner(ownerName, node)
 	default:
-		return group, output.NewHintError(
+		return OwnerGroup{Name: ownerName}, output.NewHintError(
 			fmt.Errorf("owner %q must be a mapping (categorized) or sequence (flat), got YAML kind %d", ownerName, node.Kind),
 			"use a mapping for categorized owners or a sequence for flat owners",
 		)
 	}
+}
+
+// parseFlatOwner reads an owner whose repos are listed directly as a sequence.
+func parseFlatOwner(ownerName string, node *yaml.Node) (OwnerGroup, error) {
+	group := OwnerGroup{Name: ownerName, IsFlat: true}
+
+	if err := checkDepsKeys(node); err != nil {
+		return group, err
+	}
+
+	var rawRepos []rawRepo
+	if err := node.Decode(&rawRepos); err != nil {
+		return group, fmt.Errorf("flat owner must be a list of repo entries: %w", err)
+	}
+	if len(rawRepos) == 0 {
+		return group, output.NewHintError(
+			fmt.Errorf("owner %q has an empty repo list", ownerName),
+			"add at least one repo entry, or remove the owner",
+		)
+	}
+
+	group.Repos = repoEntries(rawRepos, ownerName, "")
+	return group, nil
+}
+
+// parseCategorizedOwner reads an owner whose keys are category names, each
+// holding its own repo list.
+func parseCategorizedOwner(ownerName string, node *yaml.Node) (OwnerGroup, error) {
+	group := OwnerGroup{Name: ownerName}
+
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		category := node.Content[i].Value
+		valNode := node.Content[i+1]
+
+		if valNode.Kind == yaml.SequenceNode {
+			if err := checkDepsKeys(valNode); err != nil {
+				return group, err
+			}
+		}
+
+		var rawRepos []rawRepo
+		if err := valNode.Decode(&rawRepos); err != nil {
+			return group, fmt.Errorf("category %q must be a list of repo entries: %w", category, err)
+		}
+		if len(rawRepos) == 0 {
+			return group, output.NewHintError(
+				fmt.Errorf("category %q has an empty repo list", category),
+				"add at least one repo to category, or remove it",
+			)
+		}
+
+		group.Repos = append(group.Repos, repoEntries(rawRepos, ownerName, category)...)
+	}
 
 	return group, nil
+}
+
+// checkDepsKeys rejects the removed "deps:" key in any entry of a repo list.
+func checkDepsKeys(listNode *yaml.Node) error {
+	for _, item := range listNode.Content {
+		if item.Kind != yaml.MappingNode {
+			continue
+		}
+		if err := checkForDepsKey(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// repoEntries converts decoded YAML repos into entries for one owner and
+// category ("" for a flat owner).
+func repoEntries(raw []rawRepo, ownerName, category string) []RepoEntry {
+	entries := make([]RepoEntry, 0, len(raw))
+	for _, r := range raw {
+		entries = append(entries, RepoEntry{
+			Repo:     r.Repo,
+			Owner:    ownerName,
+			Category: category,
+			CloneURL: "git@github.com:" + r.Repo + ".git",
+			Install:  r.Install,
+			Update:   r.Update,
+		})
+	}
+	return entries
 }
 
 // checkForDepsKey scans a repo mapping node for the removed "deps" key.
