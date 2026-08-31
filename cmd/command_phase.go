@@ -5,7 +5,11 @@ import (
 	"os"
 
 	"github.com/deligoez/rp/internal/manifest"
+	"github.com/deligoez/rp/internal/output"
 	"github.com/deligoez/rp/internal/runner"
+	"github.com/deligoez/rp/internal/ui"
+	"github.com/deligoez/rp/internal/worker"
+	"github.com/spf13/cobra"
 )
 
 // repoCommandResult holds the outcome of running a repo's manifest commands.
@@ -49,4 +53,379 @@ func runRepoCommands(entry manifest.RepoEntry, commands []string) repoCommandRes
 	}
 
 	return result
+}
+
+// commandCmdSpec describes one of the two manifest-command commands. rp
+// install and rp update run the same pipeline over a different command list,
+// so the pipeline lives here once and each command supplies only its wording.
+type commandCmdSpec struct {
+	name       string // "install" / "update"
+	verb       string // progress verb, e.g. "installing"
+	heading    string // human header, e.g. "Installing"
+	pastTense  string // live-log word, padded so the columns line up
+	dryRun     *bool
+	commandsOf func(manifest.RepoEntry) []string
+}
+
+// runCommandCmd is the shared body of rp install and rp update.
+func runCommandCmd(spec commandCmdSpec, cmd *cobra.Command, args []string) error {
+	ui.SetNoColor(NoColor)
+
+	m, err := manifest.Load(ManifestPath)
+	if err != nil {
+		if output.IsJSON() {
+			output.PrintErrorAndExit(spec.name, err)
+		}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(2)
+	}
+
+	allRepos := m.Repos()
+
+	// Determine target repos based on optional filter argument.
+	var targets []manifest.RepoEntry
+
+	if len(args) == 1 {
+		// Positional argument takes precedence over --filter; warn if both provided.
+		if len(Filters) > 0 {
+			fmt.Fprintf(os.Stderr, "warning: positional repo argument takes precedence over --filter; --filter ignored\n")
+		}
+		filter := args[0]
+		found := false
+		for _, r := range allRepos {
+			if r.Repo == filter {
+				found = true
+				if len(spec.commandsOf(r)) == 0 {
+					if output.IsJSON() {
+						output.PrintAndExit(output.SuccessResult{
+							Command:  spec.name,
+							ExitCode: 0,
+							Summary: map[string]int{
+								"succeeded": 0,
+								"failed":    0,
+								"skipped":   0,
+								"total":     0,
+								"commands":  0,
+							},
+							Repos: []interface{}{},
+						})
+					}
+					fmt.Printf("no %s commands configured for %s\n", spec.name, filter)
+					return nil
+				}
+				targets = append(targets, r)
+				break
+			}
+		}
+		if !found {
+			notFoundErr := output.NewHintError(
+				fmt.Errorf("repo %q not found in manifest", filter),
+				"check repo name, available: rp list --json",
+			)
+			if output.IsJSON() {
+				output.PrintErrorAndExit(spec.name, notFoundErr)
+			}
+			fmt.Fprintf(os.Stderr, "%s\n", output.FormatHumanError(notFoundErr))
+			os.Exit(2)
+		}
+	} else {
+		// No positional arg: collect all repos that define commands, then apply --filter.
+		var withCommands []manifest.RepoEntry
+		for _, r := range allRepos {
+			if len(spec.commandsOf(r)) > 0 {
+				withCommands = append(withCommands, r)
+			}
+		}
+		targets = manifest.FilterRepos(withCommands, Filters)
+	}
+
+	if len(targets) == 0 {
+		if output.IsJSON() {
+			output.PrintAndExit(output.SuccessResult{
+				Command:  spec.name,
+				ExitCode: 0,
+				Summary: map[string]int{
+					"succeeded": 0,
+					"failed":    0,
+					"skipped":   0,
+					"total":     0,
+					"commands":  0,
+				},
+				Repos: []interface{}{},
+			})
+		}
+		fmt.Printf("no repos with %s commands defined\n", spec.name)
+		return nil
+	}
+
+	// --dry-run: list commands that would run without executing them.
+	if *spec.dryRun {
+		type jsonCommandEntry struct {
+			Command string `json:"command"`
+			Status  string `json:"status"`
+		}
+		type jsonRepoEntry struct {
+			Repo     string             `json:"repo"`
+			Status   string             `json:"status"`
+			Reason   string             `json:"reason,omitempty"`
+			Commands []jsonCommandEntry `json:"commands,omitempty"`
+		}
+
+		jsonRepos := make([]jsonRepoEntry, 0, len(targets))
+		dryRepos := 0
+		dryCommands := 0
+		drySkipped := 0
+
+		for _, target := range targets {
+			if _, err := os.Stat(target.LocalPath); os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "warning: %s not found on disk, skipping\n", target.LocalPath)
+				drySkipped++
+				if output.IsJSON() {
+					jsonRepos = append(jsonRepos, jsonRepoEntry{
+						Repo:   target.Repo,
+						Status: "skipped",
+						Reason: "not_on_disk",
+					})
+				}
+				continue
+			}
+
+			dryRepos++
+			if output.IsJSON() {
+				cmds := make([]jsonCommandEntry, 0, len(spec.commandsOf(target)))
+				for _, command := range spec.commandsOf(target) {
+					dryCommands++
+					cmds = append(cmds, jsonCommandEntry{Command: command, Status: "would_run"})
+				}
+				jsonRepos = append(jsonRepos, jsonRepoEntry{
+					Repo:     target.Repo,
+					Status:   "ok",
+					Commands: cmds,
+				})
+			}
+		}
+
+		if output.IsJSON() {
+			output.PrintAndExit(output.SuccessResult{
+				Command:  spec.name,
+				ExitCode: 0,
+				DryRun:   true,
+				Summary: map[string]int{
+					"repos":    dryRepos,
+					"commands": dryCommands,
+					"skipped":  drySkipped,
+				},
+				Repos: jsonRepos,
+			})
+		}
+
+		// Human dry-run output: group by owner, same as normal output.
+		for _, ownerGroup := range m.Owners() {
+			ownerPrinted := false
+			for _, entry := range ownerGroup.Repos {
+				// Only print targets.
+				inTargets := false
+				for _, t := range targets {
+					if t.Repo == entry.Repo {
+						inTargets = true
+						break
+					}
+				}
+				if !inTargets {
+					continue
+				}
+
+				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+					// Already printed warning above; skip here.
+					continue
+				}
+
+				if !ownerPrinted {
+					fmt.Println(ownerGroup.Name)
+					ownerPrinted = true
+				}
+
+				label := repoLabel(entry)
+				paddedLabel := ui.PadRight(label, 24)
+				for _, command := range spec.commandsOf(entry) {
+					dryCommands++
+					fmt.Printf("  %s would run: %s\n", paddedLabel, command)
+				}
+			}
+		}
+
+		fmt.Println()
+		fmt.Printf("-- Summary --\n%s, %s\n",
+			ui.Plural(dryRepos, "repo"),
+			ui.Plural(dryCommands, "command"),
+		)
+		return nil
+	}
+
+	// JSON path: preserve ordered results (no live log).
+	succeeded := 0
+	failed := 0
+	skipped := 0
+	totalCommands := 0
+	anyFailed := false
+
+	if output.IsJSON() {
+		opts := worker.PoolOptions{Verb: spec.verb}
+		results := worker.PoolWithProgress(targets, Concurrency, opts, func(entry manifest.RepoEntry) (repoCommandResult, error) {
+			return runRepoCommands(entry, spec.commandsOf(entry)), nil
+		})
+
+		resultMap := make(map[string]repoCommandResult, len(results))
+		for _, r := range results {
+			resultMap[r.Value.entry.Repo] = r.Value
+		}
+
+		type jsonCommandEntry struct {
+			Command string `json:"command"`
+			Status  string `json:"status"`
+			Error   string `json:"error,omitempty"`
+		}
+		type jsonRepoEntry struct {
+			Repo     string             `json:"repo"`
+			Status   string             `json:"status"`
+			Reason   string             `json:"reason,omitempty"`
+			Commands []jsonCommandEntry `json:"commands,omitempty"`
+		}
+
+		jsonRepos := make([]jsonRepoEntry, 0, len(targets))
+
+		for _, target := range targets {
+			res, ok := resultMap[target.Repo]
+			if !ok {
+				continue
+			}
+
+			if res.skipped {
+				skipped++
+				jsonRepos = append(jsonRepos, jsonRepoEntry{
+					Repo:   target.Repo,
+					Status: "skipped",
+					Reason: "not_on_disk",
+				})
+				continue
+			}
+
+			repoFailed := false
+			var cmds []jsonCommandEntry
+			for _, cr := range res.results {
+				entry := jsonCommandEntry{Command: cr.command}
+				totalCommands++
+				if cr.failed {
+					entry.Status = "failed"
+					entry.Error = cr.errMsg
+					repoFailed = true
+				} else {
+					entry.Status = "ok"
+				}
+				cmds = append(cmds, entry)
+			}
+
+			repoStatus := "ok"
+			if repoFailed {
+				repoStatus = "failed"
+				failed++
+				anyFailed = true
+			} else {
+				succeeded++
+			}
+
+			jsonRepos = append(jsonRepos, jsonRepoEntry{
+				Repo:     target.Repo,
+				Status:   repoStatus,
+				Commands: cmds,
+			})
+		}
+
+		exitCode := 0
+		if skipped > 0 {
+			exitCode = 1
+		}
+		if anyFailed {
+			exitCode = 2
+		}
+
+		output.PrintAndExit(output.SuccessResult{
+			Command:  spec.name,
+			ExitCode: exitCode,
+			Summary: map[string]int{
+				"succeeded": succeeded,
+				"failed":    failed,
+				"skipped":   skipped,
+				"total":     len(targets),
+				"commands":  totalCommands,
+			},
+			Repos: jsonRepos,
+		})
+	}
+
+	// Human path: stream per-repo lines as each worker finishes.
+	fmt.Printf(spec.heading+" %s (concurrency: %d)...\n\n",
+		ui.Plural(len(targets), "repo"), Concurrency)
+
+	_ = worker.PoolWithLiveLog(
+		targets,
+		Concurrency,
+		func(entry manifest.RepoEntry) (repoCommandResult, error) {
+			return runRepoCommands(entry, spec.commandsOf(entry)), nil
+		},
+		func(n, total int, entry manifest.RepoEntry, res repoCommandResult, _ error) {
+			label := ui.PadRight(repoLabel(entry), 24)
+			if res.skipped {
+				skipped++
+				fmt.Printf("[%d/%d] -- skipped    %s (not on disk)\n", n, total, label)
+				return
+			}
+			repoFailed := false
+			var failedCmd commandOutcome
+			for _, cr := range res.results {
+				totalCommands++
+				if cr.failed {
+					repoFailed = true
+					failedCmd = cr
+				}
+			}
+			if repoFailed {
+				failed++
+				anyFailed = true
+				fmt.Printf("[%d/%d] %s FAILED     %s: %s (%s)\n",
+					n, total, ui.SymbolError(), label, failedCmd.command, failedCmd.errMsg)
+				return
+			}
+			if len(res.results) > 0 {
+				succeeded++
+				fmt.Printf("[%d/%d] %s "+spec.pastTense+"%s (%s)\n",
+					n, total, ui.SymbolOK(), label, ui.Plural(len(res.results), "command"))
+			}
+		},
+	)
+
+	// Summary line.
+	fmt.Println()
+	fmt.Println(ui.SummaryLine(
+		fmt.Sprintf("%s, %s succeeded, %d skipped, %d failed",
+			ui.Plural(len(targets), "repo"),
+			ui.Plural(totalCommands, "command"),
+			skipped,
+			failed,
+		),
+	))
+
+	exitCode := 0
+	if skipped > 0 {
+		exitCode = 1
+	}
+	if anyFailed {
+		exitCode = 2
+	}
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+
+	return nil
 }
