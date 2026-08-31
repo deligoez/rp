@@ -159,15 +159,16 @@ func walkForGitRepos(root string) ([]string, error) {
 // ---------------------------------------------------------------------------
 
 // readOriginURL shells out to git to get the origin remote URL.
-// Returns ("", nil) when no origin is configured.
-func readOriginURL(repoPath string) (string, error) {
+// Returns "" when no origin is configured: a repo without a remote is a
+// normal scan outcome, not an error, so the caller only has one case to
+// handle.
+func readOriginURL(repoPath string) string {
 	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
 	out, err := cmd.Output()
 	if err != nil {
-		// Exit code 2 means no such remote — not an error we need to propagate.
-		return "", nil
+		return ""
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(string(out))
 }
 
 // ---------------------------------------------------------------------------
@@ -449,12 +450,7 @@ func runManifestInit(cmd *cobra.Command, args []string) error {
 	var skipped int
 
 	for _, repoPath := range repoPaths {
-		originURL, urlErr := readOriginURL(repoPath)
-		if urlErr != nil {
-			fmt.Fprintf(os.Stderr, "skipping %s: could not read remote: %v\n", repoPath, urlErr)
-			skipped++
-			continue
-		}
+		originURL := readOriginURL(repoPath)
 		if originURL == "" {
 			fmt.Fprintf(os.Stderr, "skipping %s: no origin remote\n", repoPath)
 			skipped++
