@@ -278,16 +278,17 @@ func resolveLayouts(repos []scannedRepo) []ownerLayout {
 
 		var resolvedRepos []scannedRepo
 
-		if isFlat {
+		switch {
+		case isFlat:
 			// All repos one level below ownerDir — flat.
 			for i := range depth1 {
 				depth1[i].category = ""
 			}
 			resolvedRepos = depth1
-		} else if isCategorized {
+		case isCategorized:
 			// All repos two levels below ownerDir — categorized.
 			resolvedRepos = depth2
-		} else {
+		default:
 			// Mixed — categorized, depth-1 repos go into "repos" category.
 			if len(depth1) > 0 {
 				fmt.Fprintf(os.Stderr, "warning: owner %q has mixed-depth repos; depth-1 repos placed in \"repos\" category\n", g.ownerDirName)
