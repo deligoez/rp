@@ -251,7 +251,18 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Human output path — group by owner.
+	printDiscoverHuman(untracked, currentUser)
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+
+	return nil
+}
+
+// printDiscoverHuman lists the untracked repos grouped by owner, then the
+// summary line. currentUser gets a "(personal)" marker.
+func printDiscoverHuman(untracked []ghRepo, currentUser string) {
 	type ownerBlock struct {
 		name  string
 		repos []ghRepo
@@ -266,10 +277,10 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 		}
 		if idx, ok := ownerIdx[owner]; ok {
 			blocks[idx].repos = append(blocks[idx].repos, r)
-		} else {
-			ownerIdx[owner] = len(blocks)
-			blocks = append(blocks, ownerBlock{name: owner, repos: []ghRepo{r}})
+			continue
 		}
+		ownerIdx[owner] = len(blocks)
+		blocks = append(blocks, ownerBlock{name: owner, repos: []ghRepo{r}})
 	}
 
 	for i, b := range blocks {
@@ -292,17 +303,11 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 
 	if len(untracked) == 0 {
 		fmt.Println("-- all repos tracked --")
-	} else {
-		fmt.Printf("-- %d untracked %s across %d %s --\n",
-			len(untracked), pluralRepos(len(untracked)),
-			len(blocks), pluralOwners(len(blocks)))
+		return
 	}
-
-	if exitCode != 0 {
-		os.Exit(exitCode)
-	}
-
-	return nil
+	fmt.Printf("-- %d untracked %s across %d %s --\n",
+		len(untracked), pluralRepos(len(untracked)),
+		len(blocks), pluralOwners(len(blocks)))
 }
 
 // countUniqueRepos counts unique repos by case-insensitive nameWithOwner (after dedup).
