@@ -22,7 +22,7 @@ var installCmd = &cobra.Command{
 			pastTense:  "installed  ",
 			dryRun:     &installDryRun,
 			commandsOf: func(r manifest.RepoEntry) []string { return r.Install },
-		}, cmd, args)
+		}, args)
 	},
 }
 

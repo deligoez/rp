@@ -19,7 +19,7 @@ var updateCmd = &cobra.Command{
 			pastTense:  "updated    ",
 			dryRun:     &updateDryRun,
 			commandsOf: func(r manifest.RepoEntry) []string { return r.Update },
-		}, cmd, args)
+		}, args)
 	},
 }
 

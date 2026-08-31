@@ -9,7 +9,6 @@ import (
 	"github.com/deligoez/rp/internal/runner"
 	"github.com/deligoez/rp/internal/ui"
 	"github.com/deligoez/rp/internal/worker"
-	"github.com/spf13/cobra"
 )
 
 // repoCommandResult holds the outcome of running a repo's manifest commands.
@@ -68,7 +67,7 @@ type commandCmdSpec struct {
 }
 
 // runCommandCmd is the shared body of rp install and rp update.
-func runCommandCmd(spec commandCmdSpec, cmd *cobra.Command, args []string) error {
+func runCommandCmd(spec commandCmdSpec, args []string) error {
 	ui.SetNoColor(NoColor)
 
 	m, err := manifest.Load(ManifestPath)
