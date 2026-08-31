@@ -83,11 +83,6 @@ func SetCompact(v bool) {
 	compact = v
 }
 
-// IsCompact reports whether compact mode is active.
-func IsCompact() bool {
-	return compact
-}
-
 // PrintAndExit writes the result as JSON to stdout and exits with the given exit code.
 func PrintAndExit(v interface{}) {
 	var exitCode int
