@@ -22,5 +22,17 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Vet
-        run: go vet ./...
+      # golangci-lint runs govet, so no separate vet step is needed.
+      # Pinned, not @latest: the gate must be a function of this repo's code,
+      # not of whichever linter version happened to publish today. Keep this in
+      # step with the version developers run locally, and check it supports the
+      # Go release `stable` resolves to — a static analyser panics on stdlib it
+      # does not know (v2.12.x does exactly that on Go 1.27).
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+
+      - name: Lint
+        run: golangci-lint run
+
+      - name: Dead code
+        run: ./scripts/deadcode.sh
