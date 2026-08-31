@@ -228,219 +228,153 @@ func upHumanSync(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clone
 	return upSyncCounts{pulled: syPulled, upToDate: syUpToDate, skipped: sySkipped, failed: syFailed}
 }
 
+// upCommandPhase describes one of up's two command phases. Install and update
+// differ only in which repos they target, which command list they run, and
+// whether a dry run first checks the repo is on disk: install targets are
+// repos bootstrap would clone, so under --dry-run they are not there yet.
+type upCommandPhase struct {
+	name            string
+	verb            string
+	enabled         bool
+	commandsOf      func(manifest.RepoEntry) []string
+	isTarget        func(manifest.RepoEntry) bool
+	dryRunNeedsDisk bool
+}
+
 // upHumanInstall runs install commands for the repos bootstrap just cloned.
 func upHumanInstall(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clonedSet map[string]bool) upCommandCounts {
-	// ── Phase 3: Install (only cloned repos) ─────────────────────────────────
-	var instSucceeded, instFailed int
-	var dryInstRepos, dryInstCommands int
-
-	runInstallPhase := !upNoInstall
-
-	if runInstallPhase {
-		fmt.Println("== Install ==")
-
-		// Install targets: repos that were cloned (or would be cloned) and have install commands.
-		var installTargets []manifest.RepoEntry
-		for _, r := range repos {
-			if len(r.Install) > 0 && clonedSet[r.Repo] {
-				installTargets = append(installTargets, r)
-			}
-		}
-
-		if len(installTargets) > 0 {
-			if upDryRun {
-				for _, ownerGroup := range owners {
-					ownerPrinted := false
-					for _, entry := range ownerGroup.Repos {
-						inTargets := false
-						for _, t := range installTargets {
-							if t.Repo == entry.Repo {
-								inTargets = true
-								break
-							}
-						}
-						if !inTargets {
-							continue
-						}
-						if !ownerPrinted {
-							fmt.Println(ownerGroup.Name)
-							ownerPrinted = true
-						}
-						label := repoLabel(entry)
-						paddedLabel := ui.PadRight(label, 24)
-						for _, command := range entry.Install {
-							fmt.Printf("  %s would run: %s\n", paddedLabel, command)
-							dryInstCommands++
-						}
-						dryInstRepos++
-					}
-				}
-			} else {
-				installResults := worker.PoolWithProgress(
-					installTargets,
-					Concurrency,
-					worker.PoolOptions{Verb: "installing"},
-					func(entry manifest.RepoEntry) (repoCommandResult, error) {
-						return runRepoCommands(entry, entry.Install), nil
-					},
-				)
-
-				installMap := make(map[string]repoCommandResult, len(installResults))
-				for _, r := range installResults {
-					installMap[r.Value.entry.Repo] = r.Value
-				}
-
-				for _, ownerGroup := range owners {
-					ownerPrinted := false
-					for _, entry := range ownerGroup.Repos {
-						res, ok := installMap[entry.Repo]
-						if !ok {
-							continue
-						}
-						label := repoLabel(entry)
-						paddedLabel := ui.PadRight(label, 24)
-						if !ownerPrinted {
-							fmt.Println(ownerGroup.Name)
-							ownerPrinted = true
-						}
-						if res.skipped {
-							fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
-							continue
-						}
-						repoFailed := false
-						for _, cr := range res.results {
-							if cr.failed {
-								fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
-								repoFailed = true
-							} else {
-								fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
-							}
-						}
-						if repoFailed {
-							instFailed++
-						} else if len(res.results) > 0 {
-							instSucceeded++
-						}
-					}
-				}
-			}
-			fmt.Println()
-		}
-	}
-
-	return upCommandCounts{
-		ran: runInstallPhase, succeeded: instSucceeded, failed: instFailed,
-		dryRepos: dryInstRepos, dryCommands: dryInstCommands,
-	}
+	return runUpHumanCommandPhase(upCommandPhase{
+		name:       "Install",
+		verb:       "installing",
+		enabled:    !upNoInstall,
+		commandsOf: func(r manifest.RepoEntry) []string { return r.Install },
+		isTarget:   func(r manifest.RepoEntry) bool { return clonedSet[r.Repo] },
+	}, repos, owners)
 }
 
 // upHumanUpdate runs update commands for the repos that already existed.
 func upHumanUpdate(repos []manifest.RepoEntry, owners []manifest.OwnerGroup, clonedSet, failedSet map[string]bool) upCommandCounts {
-	// ── Phase 4: Update (pre-existing repos only) ────────────────────────────
-	var updSucceeded, updFailed int
-	var dryUpdRepos, dryUpdCommands int
+	return runUpHumanCommandPhase(upCommandPhase{
+		name:            "Update",
+		verb:            "updating",
+		enabled:         !upNoUpdate,
+		commandsOf:      func(r manifest.RepoEntry) []string { return r.Update },
+		isTarget:        func(r manifest.RepoEntry) bool { return !clonedSet[r.Repo] && !failedSet[r.Repo] },
+		dryRunNeedsDisk: true,
+	}, repos, owners)
+}
 
-	runUpdatePhase := !upNoUpdate
-
-	if runUpdatePhase {
-		fmt.Println("== Update ==")
-
-		// Update targets: repos that are pre-existing (not cloned, not failed) and have update commands.
-		var updateTargets []manifest.RepoEntry
-		for _, r := range repos {
-			if len(r.Update) > 0 && !clonedSet[r.Repo] && !failedSet[r.Repo] {
-				updateTargets = append(updateTargets, r)
-			}
-		}
-
-		if len(updateTargets) > 0 {
-			if upDryRun {
-				for _, ownerGroup := range owners {
-					ownerPrinted := false
-					for _, entry := range ownerGroup.Repos {
-						inTargets := false
-						for _, t := range updateTargets {
-							if t.Repo == entry.Repo {
-								inTargets = true
-								break
-							}
-						}
-						if !inTargets {
-							continue
-						}
-						if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
-							fmt.Fprintf(os.Stderr, "  warning: %s not found on disk, skipping\n", entry.LocalPath)
-							continue
-						}
-						if !ownerPrinted {
-							fmt.Println(ownerGroup.Name)
-							ownerPrinted = true
-						}
-						label := repoLabel(entry)
-						paddedLabel := ui.PadRight(label, 24)
-						for _, command := range entry.Update {
-							fmt.Printf("  %s would run: %s\n", paddedLabel, command)
-							dryUpdCommands++
-						}
-						dryUpdRepos++
-					}
-				}
-			} else {
-				updateResults := worker.PoolWithProgress(
-					updateTargets,
-					Concurrency,
-					worker.PoolOptions{Verb: "updating"},
-					func(entry manifest.RepoEntry) (repoCommandResult, error) {
-						return runRepoCommands(entry, entry.Update), nil
-					},
-				)
-
-				updateMap := make(map[string]repoCommandResult, len(updateResults))
-				for _, r := range updateResults {
-					updateMap[r.Value.entry.Repo] = r.Value
-				}
-
-				for _, ownerGroup := range owners {
-					ownerPrinted := false
-					for _, entry := range ownerGroup.Repos {
-						res, ok := updateMap[entry.Repo]
-						if !ok {
-							continue
-						}
-						label := repoLabel(entry)
-						paddedLabel := ui.PadRight(label, 24)
-						if !ownerPrinted {
-							fmt.Println(ownerGroup.Name)
-							ownerPrinted = true
-						}
-						if res.skipped {
-							fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
-							continue
-						}
-						repoFailed := false
-						for _, cr := range res.results {
-							if cr.failed {
-								fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
-								repoFailed = true
-							} else {
-								fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
-							}
-						}
-						if repoFailed {
-							updFailed++
-						} else if len(res.results) > 0 {
-							updSucceeded++
-						}
-					}
-				}
-			}
-			fmt.Println()
-		}
+// runUpHumanCommandPhase prints one command phase's block and reports its
+// counts. A disabled phase prints nothing and reports ran=false.
+func runUpHumanCommandPhase(phase upCommandPhase, repos []manifest.RepoEntry, owners []manifest.OwnerGroup) upCommandCounts {
+	counts := upCommandCounts{ran: phase.enabled}
+	if !phase.enabled {
+		return counts
 	}
 
-	return upCommandCounts{
-		ran: runUpdatePhase, succeeded: updSucceeded, failed: updFailed,
-		dryRepos: dryUpdRepos, dryCommands: dryUpdCommands,
+	fmt.Printf("== %s ==\n", phase.name)
+
+	var targets []manifest.RepoEntry
+	for _, r := range repos {
+		if len(phase.commandsOf(r)) > 0 && phase.isTarget(r) {
+			targets = append(targets, r)
+		}
+	}
+	if len(targets) == 0 {
+		return counts
+	}
+
+	if upDryRun {
+		printUpCommandDryRun(phase, targets, owners, &counts)
+	} else {
+		runUpCommandPhase(phase, targets, owners, &counts)
+	}
+	fmt.Println()
+
+	return counts
+}
+
+// printUpCommandDryRun lists the commands each target would run.
+func printUpCommandDryRun(phase upCommandPhase, targets []manifest.RepoEntry, owners []manifest.OwnerGroup, counts *upCommandCounts) {
+	inTargets := make(map[string]bool, len(targets))
+	for _, t := range targets {
+		inTargets[t.Repo] = true
+	}
+
+	for _, ownerGroup := range owners {
+		ownerPrinted := false
+		for _, entry := range ownerGroup.Repos {
+			if !inTargets[entry.Repo] {
+				continue
+			}
+			if phase.dryRunNeedsDisk {
+				if _, err := os.Stat(entry.LocalPath); os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "  warning: %s not found on disk, skipping\n", entry.LocalPath)
+					continue
+				}
+			}
+			if !ownerPrinted {
+				fmt.Println(ownerGroup.Name)
+				ownerPrinted = true
+			}
+			paddedLabel := ui.PadRight(repoLabel(entry), 24)
+			for _, command := range phase.commandsOf(entry) {
+				fmt.Printf("  %s would run: %s\n", paddedLabel, command)
+				counts.dryCommands++
+			}
+			counts.dryRepos++
+		}
+	}
+}
+
+// runUpCommandPhase executes each target's commands and prints the results in
+// manifest order.
+func runUpCommandPhase(phase upCommandPhase, targets []manifest.RepoEntry, owners []manifest.OwnerGroup, counts *upCommandCounts) {
+	results := worker.PoolWithProgress(
+		targets,
+		Concurrency,
+		worker.PoolOptions{Verb: phase.verb},
+		func(entry manifest.RepoEntry) (repoCommandResult, error) {
+			return runRepoCommands(entry, phase.commandsOf(entry)), nil
+		},
+	)
+
+	resultMap := make(map[string]repoCommandResult, len(results))
+	for _, r := range results {
+		resultMap[r.Value.entry.Repo] = r.Value
+	}
+
+	for _, ownerGroup := range owners {
+		ownerPrinted := false
+		for _, entry := range ownerGroup.Repos {
+			res, ok := resultMap[entry.Repo]
+			if !ok {
+				continue
+			}
+			paddedLabel := ui.PadRight(repoLabel(entry), 24)
+			if !ownerPrinted {
+				fmt.Println(ownerGroup.Name)
+				ownerPrinted = true
+			}
+			if res.skipped {
+				fmt.Fprintf(os.Stderr, "  %s\n", res.skipMsg)
+				continue
+			}
+			repoFailed := false
+			for _, cr := range res.results {
+				if cr.failed {
+					fmt.Printf("  %s FAILED: %s (%s)\n", paddedLabel, cr.command, cr.errMsg)
+					repoFailed = true
+				} else {
+					fmt.Printf("  %s %s %s\n", paddedLabel, ui.SymbolOK(), cr.command)
+				}
+			}
+			if repoFailed {
+				counts.failed++
+			} else if len(res.results) > 0 {
+				counts.succeeded++
+			}
+		}
 	}
 }
 
