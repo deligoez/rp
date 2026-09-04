@@ -77,3 +77,19 @@ func TestSyncSkipUnsafeIgnoresAheadWithoutUpstream(t *testing.T) {
 	}
 }
 
+func TestSyncSkipUnsafeDryRunReportsWouldSkip(t *testing.T) {
+	s := git.RepoStatus{DirtyFiles: 1, Branch: "main", HasUpstream: true}
+
+	res, _ := syncSkipUnsafe(s, "label", "a/b", true)
+
+	if res.action != syncActionWouldSkip {
+		t.Errorf("action = %v, want would_skip under --dry-run", res.action)
+	}
+	if res.exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0: a dry run reports, it does not fail", res.exitCode)
+	}
+	if res.skipReason != syncSkipDirty {
+		t.Errorf("reason = %v, want the same reason as a real run", res.skipReason)
+	}
+}
+
