@@ -163,3 +163,40 @@ func TestPoolWithProgressEmptyItems(t *testing.T) {
 // PoolWithLiveLog
 // ---------------------------------------------------------------------------
 
+func TestPoolWithLiveLogPreservesItemOrder(t *testing.T) {
+	const n = 5
+	items := []int{10, 20, 30, 40, 50}
+	finish := reverseFinisher(n)
+
+	var mu sync.Mutex
+	var completionOrder []int
+
+	results := PoolWithLiveLog(items, n,
+		func(v int) (int, error) {
+			finish(v/10 - 1)
+			return v * 2, nil
+		},
+		func(_, _ int, item, _ int, _ error) {
+			mu.Lock()
+			completionOrder = append(completionOrder, item)
+			mu.Unlock()
+		},
+	)
+
+	for i, r := range results {
+		if want := items[i] * 2; r.Value != want || r.Index != i {
+			t.Errorf("results[%d] = {Index:%d Value:%d}, want {Index:%d Value:%d}", i, r.Index, r.Value, i, want)
+		}
+	}
+
+	// The fixture forces the reverse order, so this also proves the callback
+	// really does fire in completion order rather than item order.
+	want := []int{50, 40, 30, 20, 10}
+	for i, got := range completionOrder {
+		if got != want[i] {
+			t.Errorf("completion order = %v, want %v", completionOrder, want)
+			break
+		}
+	}
+}
+
