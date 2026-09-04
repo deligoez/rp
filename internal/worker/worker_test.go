@@ -385,3 +385,15 @@ func TestClearLineUsesGivenWidth(t *testing.T) {
 	}
 }
 
+func TestClearLineFallsBackWhenWidthUnknown(t *testing.T) {
+	// A terminal whose size could not be read reports 0 or a negative width;
+	// both must fall back to the conventional 80 columns.
+	for _, width := range []int{0, -1} {
+		got := clearLine(width)
+		want := "\r" + strings.Repeat(" ", 80) + "\r"
+		if got != want {
+			t.Errorf("clearLine(%d) padded %d columns, want 80", width, len(got)-2)
+		}
+	}
+}
+
