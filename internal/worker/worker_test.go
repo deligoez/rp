@@ -369,3 +369,11 @@ func captureStderr(t *testing.T, fn func()) string {
 	return <-captured
 }
 
+func TestProgressLine(t *testing.T) {
+	got := progressLine(3, 10, "cloning")
+	want := "\r[3/10] cloning..."
+	if got != want {
+		t.Errorf("progressLine(3, 10, %q) = %q, want %q", "cloning", got, want)
+	}
+}
+
