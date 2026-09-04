@@ -75,3 +75,30 @@ func TestPoolWithProgressPreservesItemOrder(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressCapturesPerItemErrors(t *testing.T) {
+	items := []int{0, 1, 2, 3}
+	boom := errors.New("boom")
+
+	results := PoolWithProgress(items, 2, PoolOptions{}, func(v int) (string, error) {
+		if v%2 == 1 {
+			return "", boom
+		}
+		return fmt.Sprintf("ok-%d", v), nil
+	})
+
+	for i, r := range results {
+		if i%2 == 1 {
+			if !errors.Is(r.Err, boom) {
+				t.Errorf("results[%d].Err = %v, want boom", i, r.Err)
+			}
+			continue
+		}
+		if r.Err != nil {
+			t.Errorf("results[%d].Err = %v, want nil", i, r.Err)
+		}
+		if want := fmt.Sprintf("ok-%d", items[i]); r.Value != want {
+			t.Errorf("results[%d].Value = %q, want %q (a failing item must not stop the others)", i, r.Value, want)
+		}
+	}
+}
+
