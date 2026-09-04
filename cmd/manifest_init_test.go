@@ -154,3 +154,16 @@ func TestResolveOwnerReposFlat(t *testing.T) {
 	}
 }
 
+func TestResolveOwnerReposCategorized(t *testing.T) {
+	depth2 := []scannedRepo{{repoName: "a", category: "svc"}}
+
+	repos, isFlat := resolveOwnerRepos("acme", depth2[:0:0], depth2)
+
+	if isFlat {
+		t.Error("an owner with only depth-2 repos is categorized")
+	}
+	if len(repos) != 1 || repos[0].category != "svc" {
+		t.Errorf("got %v, want the categorized repo unchanged", repos)
+	}
+}
+
