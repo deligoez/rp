@@ -417,3 +417,17 @@ func TestPoolWithProgressDrawsProgressOnTerminal(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressStaysSilentWithoutVerb(t *testing.T) {
+	withTerminal(t)
+
+	out := captureStderr(t, func() {
+		PoolWithProgress(make([]int, 3), 2, PoolOptions{}, func(int) (int, error) {
+			return 0, nil
+		})
+	})
+
+	if out != "" {
+		t.Errorf("an empty Verb must disable progress, got %q", out)
+	}
+}
+
