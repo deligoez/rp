@@ -91,3 +91,34 @@ func TestParseDiffCutoffWithFlag(t *testing.T) {
 	}
 }
 
+func TestParseDiffCutoffRejectsBadInput(t *testing.T) {
+	diffSince = "nonsense"
+	t.Cleanup(func() { diffSince = "" })
+
+	has, _, err := parseDiffCutoff()
+
+	if err == nil {
+		t.Fatal("expected an error for an unparseable --since")
+	}
+	if has {
+		t.Error("hasSince must be false when parsing failed")
+	}
+}
+
+// loadManifest writes a manifest to a temp file and loads it, so tests can
+// work with a real *manifest.Manifest without the package exporting a
+// constructor that production code would never use.
+func loadManifest(t *testing.T, body string) *manifest.Manifest {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "manifest.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	m, err := manifest.Load(path)
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	return m
+}
+
