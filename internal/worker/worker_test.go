@@ -469,3 +469,18 @@ func TestPoolWithProgressClearsToTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressClearsToFallbackWidthWhenUnreadable(t *testing.T) {
+	withTerminal(t)
+	withTerminalWidth(t, 12, errors.New("not a terminal"))
+
+	out := captureStderr(t, func() {
+		PoolWithProgress(make([]int, 1), 1, PoolOptions{Verb: "syncing"}, func(int) (int, error) {
+			return 0, nil
+		})
+	})
+
+	// The reported width must be ignored when the read failed, not used.
+	if !strings.HasSuffix(out, clearLine(0)) {
+		t.Errorf("expected the fallback width when the size read fails, got %q", out)
+	}
+}
