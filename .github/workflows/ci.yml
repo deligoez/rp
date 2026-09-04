@@ -19,8 +19,14 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # -race: internal/worker documents that it serialises the live-log
+      # callback, and the test for it only fails under the race detector.
+      # Measured at +2s on this suite, because the slow package spends its
+      # time waiting on subprocesses.
+      # -count=1: setup-go restores the build cache, which carries cached test
+      # results — a gate must re-run them.
       - name: Test
-        run: go test ./...
+        run: go test -race -count=1 ./...
 
       # golangci-lint runs govet, so no separate vet step is needed.
       # Pinned, not @latest: the gate must be a function of this repo's code,
