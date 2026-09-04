@@ -36,3 +36,19 @@ func TestSyncSkipUnsafeSkipsDirty(t *testing.T) {
 	}
 }
 
+func TestSyncSkipUnsafeSkipsUnpushed(t *testing.T) {
+	s := git.RepoStatus{Clean: true, Ahead: 2, Branch: "feature", HasUpstream: true}
+
+	res, skip := syncSkipUnsafe(s, "label", "a/b", false)
+
+	if !skip {
+		t.Fatal("a repo with unpushed commits must be skipped")
+	}
+	if res.skipReason != syncSkipUnpushed {
+		t.Errorf("reason = %v, want unpushed", res.skipReason)
+	}
+	if res.ahead != 2 || res.branch != "feature" {
+		t.Errorf("ahead/branch = %d/%q, want 2/feature", res.ahead, res.branch)
+	}
+}
+
