@@ -125,3 +125,22 @@ func TestPoolWithProgressBoundsConcurrency(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressCallsEachItemExactlyOnce(t *testing.T) {
+	items := []string{"a", "b", "c", "d"}
+	var mu sync.Mutex
+	seen := map[string]int{}
+
+	PoolWithProgress(items, 2, PoolOptions{Verb: "testing"}, func(s string) (int, error) {
+		mu.Lock()
+		seen[s]++
+		mu.Unlock()
+		return 0, nil
+	})
+
+	for _, s := range items {
+		if seen[s] != 1 {
+			t.Errorf("fn called %d times for %q, want exactly 1", seen[s], s)
+		}
+	}
+}
+
