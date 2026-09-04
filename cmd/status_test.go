@@ -148,3 +148,32 @@ func TestCountStatusJSON(t *testing.T) {
 	}
 }
 
+func TestFilterStatusLinesPairsRowsWithJSONByIndex(t *testing.T) {
+	statusDirty = true
+	t.Cleanup(func() { statusDirty = false })
+
+	lines := []statusOwnerLines{
+		{name: "acme", repos: []statusRepoLine{{label: "clean"}, {label: "dirty"}}},
+		{name: "solo", repos: []statusRepoLine{{label: "also-clean"}}},
+	}
+	jsonRepos := []statusRepoJSON{
+		jsonRepo("acme/clean", true, 0, 0, 0, true),
+		jsonRepo("acme/dirty", false, 1, 0, 0, true),
+		jsonRepo("solo/also-clean", true, 0, 0, 0, true),
+	}
+
+	got := filterStatusLines(lines, jsonRepos)
+
+	// Only acme survives, and only its dirty row: an owner whose repos are all
+	// filtered out is dropped entirely.
+	if len(got) != 1 {
+		t.Fatalf("got %d owner blocks, want 1", len(got))
+	}
+	if got[0].name != "acme" {
+		t.Errorf("surviving owner = %q, want acme", got[0].name)
+	}
+	if len(got[0].repos) != 1 || got[0].repos[0].label != "dirty" {
+		t.Errorf("surviving rows = %v, want just the dirty one", got[0].repos)
+	}
+}
+
