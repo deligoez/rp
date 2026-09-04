@@ -52,3 +52,18 @@ func TestSyncSkipUnsafeSkipsUnpushed(t *testing.T) {
 	}
 }
 
+func TestSyncSkipUnsafePrefersDirtyOverUnpushed(t *testing.T) {
+	// Both conditions hold. Dirty is the more urgent one to report, and the
+	// evaluation order is part of the documented behaviour.
+	s := git.RepoStatus{DirtyFiles: 1, Ahead: 4, Branch: "main", HasUpstream: true}
+
+	res, skip := syncSkipUnsafe(s, "label", "a/b", false)
+
+	if !skip {
+		t.Fatal("expected a skip")
+	}
+	if res.skipReason != syncSkipDirty {
+		t.Errorf("reason = %v, want dirty to win over unpushed", res.skipReason)
+	}
+}
+
