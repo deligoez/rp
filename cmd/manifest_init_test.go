@@ -110,3 +110,29 @@ func TestInferOwnerDirStopsAtTheScanRoot(t *testing.T) {
 	}
 }
 
+func TestSplitReposByDepth(t *testing.T) {
+	owner := filepath.Join(t.TempDir(), "acme")
+	repos := []scannedRepo{
+		{absPath: filepath.Join(owner, "flat")},
+		{absPath: filepath.Join(owner, "svc", "api")},
+		{absPath: filepath.Join(owner, "a", "b", "deep")},
+	}
+
+	depth1, depth2 := splitReposByDepth(owner, repos)
+
+	if len(depth1) != 1 || depth1[0].absPath != filepath.Join(owner, "flat") {
+		t.Errorf("depth1 = %v, want just the directly-nested repo", depth1)
+	}
+	if len(depth2) != 2 {
+		t.Fatalf("depth2 has %d repos, want 2", len(depth2))
+	}
+	if depth2[0].category != "svc" {
+		t.Errorf("category = %q, want %q", depth2[0].category, "svc")
+	}
+	// Anything deeper than two levels keeps its whole intermediate path as the
+	// category, so the manifest can round-trip it.
+	if depth2[1].category != "a/b" {
+		t.Errorf("nested category = %q, want %q", depth2[1].category, "a/b")
+	}
+}
+
