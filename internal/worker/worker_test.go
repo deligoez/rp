@@ -377,3 +377,11 @@ func TestProgressLine(t *testing.T) {
 	}
 }
 
+func TestClearLineUsesGivenWidth(t *testing.T) {
+	got := clearLine(4)
+	want := "\r    \r"
+	if got != want {
+		t.Errorf("clearLine(4) = %q, want %q", got, want)
+	}
+}
+
