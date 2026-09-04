@@ -187,3 +187,13 @@ func TestStatusLabelWidthHasAFloor(t *testing.T) {
 	}
 }
 
+func TestStatusLabelWidthGrowsForLongLabels(t *testing.T) {
+	long := manifest.RepoEntry{Repo: "o/a-very-long-repository-name", Category: "services"}
+	owners := []manifest.OwnerGroup{{Name: "o", Repos: []manifest.RepoEntry{long}}}
+
+	want := len(repoLabel(long))
+	if got := statusLabelWidth(owners); got != want {
+		t.Errorf("statusLabelWidth = %d, want %d (the longest label)", got, want)
+	}
+}
+
