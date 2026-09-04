@@ -42,3 +42,9 @@ func TestSummaryLineJoinsPartsUnderHeader(t *testing.T) {
 	}
 }
 
+func TestSummaryLineWithNoParts(t *testing.T) {
+	if got, want := SummaryLine(), "-- Summary --\n"; got != want {
+		t.Errorf("SummaryLine() = %q, want %q", got, want)
+	}
+}
+
