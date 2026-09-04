@@ -37,3 +37,17 @@ func TestParseGitHubRemote(t *testing.T) {
 	}
 }
 
+func TestInferOwnerDirFindsAncestorByName(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "deligoez", "projects", "rp")
+
+	got, found := inferOwnerDir(repo, root, "deligoez")
+
+	if !found {
+		t.Error("expected the owner directory to be found by name")
+	}
+	if want := filepath.Join(root, "deligoez"); got != want {
+		t.Errorf("inferOwnerDir = %q, want %q", got, want)
+	}
+}
+
