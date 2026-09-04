@@ -144,3 +144,22 @@ func TestPoolWithProgressCallsEachItemExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressEmptyItems(t *testing.T) {
+	called := false
+	results := PoolWithProgress(nil, 4, PoolOptions{Verb: "testing"}, func(int) (int, error) {
+		called = true
+		return 0, nil
+	})
+
+	if len(results) != 0 {
+		t.Errorf("len(results) = %d, want 0", len(results))
+	}
+	if called {
+		t.Error("fn must not be called for an empty item list")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PoolWithLiveLog
+// ---------------------------------------------------------------------------
+
