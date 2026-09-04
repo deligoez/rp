@@ -67,3 +67,18 @@ func TestUpHumanExitCodeSumsEveryPhasesFailures(t *testing.T) {
 	}
 }
 
+func TestUpHumanExitCodeMatchesTheJSONPath(t *testing.T) {
+	// Both output modes must agree, which is the reason they share code().
+	boot := upBootstrapOutcome{failed: 1}
+	sync := upSyncCounts{skipped: 2}
+
+	human := upHumanExitCode(boot, sync, upCommandCounts{}, upCommandCounts{})
+
+	var tally upExitTally
+	tally.add(upExitTally{failed: boot.failed})
+	tally.add(upExitTally{failed: sync.failed, skipped: sync.skipped})
+
+	if human != tally.code() {
+		t.Errorf("human exit code %d != JSON exit code %d", human, tally.code())
+	}
+}
