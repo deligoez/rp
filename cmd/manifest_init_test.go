@@ -78,3 +78,17 @@ func TestInferOwnerDirPrefersTheNearestMatch(t *testing.T) {
 	}
 }
 
+func TestInferOwnerDirFallsBackToTheParent(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "somewhere", "rp")
+
+	got, found := inferOwnerDir(repo, root, "deligoez")
+
+	if found {
+		t.Error("no ancestor is named after the owner, so found must be false")
+	}
+	if want := filepath.Join(root, "somewhere"); got != want {
+		t.Errorf("inferOwnerDir = %q, want the immediate parent %q", got, want)
+	}
+}
+
