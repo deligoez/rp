@@ -65,3 +65,16 @@ func TestInferOwnerDirMatchesCaseInsensitively(t *testing.T) {
 	}
 }
 
+func TestInferOwnerDirPrefersTheNearestMatch(t *testing.T) {
+	// The owner name appears twice on the path; the one closest to the repo
+	// wins, because that is the directory actually grouping it.
+	root := t.TempDir()
+	repo := filepath.Join(root, "acme", "vendor", "acme", "tool")
+
+	got, _ := inferOwnerDir(repo, root, "acme")
+
+	if want := filepath.Join(root, "acme", "vendor", "acme"); got != want {
+		t.Errorf("inferOwnerDir = %q, want the nearest match %q", got, want)
+	}
+}
+
