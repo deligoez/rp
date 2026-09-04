@@ -101,3 +101,27 @@ func TestStatusPassesFiltersDirty(t *testing.T) {
 	}
 }
 
+func TestStatusPassesFiltersAheadAndBehind(t *testing.T) {
+	statusAhead = true
+	t.Cleanup(func() { statusAhead = false })
+
+	if statusPassesFilters(jsonRepo("a/b", true, 0, 0, 5, true)) {
+		t.Error("--ahead must drop a repo that is only behind")
+	}
+	if !statusPassesFilters(jsonRepo("a/b", true, 0, 1, 0, true)) {
+		t.Error("--ahead must keep a repo that is ahead")
+	}
+
+	statusBehind = true
+	t.Cleanup(func() { statusBehind = false })
+
+	// Both flags now set: they are ANDed, so only a repo that is both ahead
+	// and behind survives.
+	if statusPassesFilters(jsonRepo("a/b", true, 0, 1, 0, true)) {
+		t.Error("--ahead --behind must drop a repo that is only ahead")
+	}
+	if !statusPassesFilters(jsonRepo("a/b", true, 0, 1, 1, true)) {
+		t.Error("--ahead --behind must keep a diverged repo")
+	}
+}
+
