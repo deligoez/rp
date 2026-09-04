@@ -36,3 +36,34 @@ func TestUpExitTallyAdd(t *testing.T) {
 	}
 }
 
+func TestUpHumanExitCodeSumsEveryPhasesFailures(t *testing.T) {
+	cases := []struct {
+		name string
+		boot upBootstrapOutcome
+		sync upSyncCounts
+		inst upCommandCounts
+		upd  upCommandCounts
+		want int
+	}{
+		{name: "all clear", want: 0},
+		{name: "bootstrap failed", boot: upBootstrapOutcome{failed: 1}, want: 2},
+		{name: "sync failed", sync: upSyncCounts{failed: 1}, want: 2},
+		{name: "install failed", inst: upCommandCounts{failed: 1}, want: 2},
+		{name: "update failed", upd: upCommandCounts{failed: 1}, want: 2},
+		{name: "sync skipped", sync: upSyncCounts{skipped: 2}, want: 1},
+
+		// A command phase skipping a repo is not an error: the repo simply was
+		// not on disk. Only sync's skips raise the exit code.
+		{name: "install skipped", inst: upCommandCounts{ran: true}, want: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := upHumanExitCode(tc.boot, tc.sync, tc.inst, tc.upd)
+			if got != tc.want {
+				t.Errorf("upHumanExitCode = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
