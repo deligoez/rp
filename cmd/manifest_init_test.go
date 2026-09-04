@@ -198,3 +198,28 @@ func TestResolveOwnerReposEmpty(t *testing.T) {
 		t.Errorf("got %d repos, want none", len(repos))
 	}
 }
+
+func TestResolveOwnerReposMixedWithMoreLooseThanCategorized(t *testing.T) {
+	// The merged slice is preallocated from both lengths. This case has more
+	// depth-1 than depth-2 repos, which is where a wrong capacity arithmetic
+	// would show up.
+	depth1 := []scannedRepo{{repoName: "one"}, {repoName: "two"}, {repoName: "three"}}
+	depth2 := []scannedRepo{{repoName: "api", category: "svc"}}
+
+	repos, isFlat := resolveOwnerRepos("acme", depth1, depth2)
+
+	if isFlat {
+		t.Error("a mixed owner is categorized")
+	}
+	if len(repos) != 4 {
+		t.Fatalf("got %d repos, want all 4", len(repos))
+	}
+	if repos[0].category != "svc" {
+		t.Errorf("repos[0].category = %q, want the categorized repo first", repos[0].category)
+	}
+	for _, r := range repos[1:] {
+		if r.category != "repos" {
+			t.Errorf("%q landed in %q, want the \"repos\" category", r.repoName, r.category)
+		}
+	}
+}
