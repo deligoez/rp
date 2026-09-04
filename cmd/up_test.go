@@ -23,3 +23,16 @@ func TestUpExitTallyCode(t *testing.T) {
 	}
 }
 
+func TestUpExitTallyAdd(t *testing.T) {
+	var total upExitTally
+	total.add(upExitTally{failed: 1})
+	total.add(upExitTally{failed: 2, skipped: 3})
+
+	if total.failed != 3 {
+		t.Errorf("failed = %d, want 3", total.failed)
+	}
+	if total.skipped != 3 {
+		t.Errorf("skipped = %d, want 3", total.skipped)
+	}
+}
+
