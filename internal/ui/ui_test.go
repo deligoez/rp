@@ -48,3 +48,13 @@ func TestSummaryLineWithNoParts(t *testing.T) {
 	}
 }
 
+func TestPadRightPadsToWidth(t *testing.T) {
+	got := PadRight("ab", 5)
+	if got != "ab   " {
+		t.Errorf("PadRight(%q, 5) = %q, want %q", "ab", got, "ab   ")
+	}
+	if len(got) != 5 {
+		t.Errorf("PadRight produced %d characters, want 5", len(got))
+	}
+}
+
