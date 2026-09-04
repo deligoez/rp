@@ -68,3 +68,26 @@ func TestParseDiffCutoffWithoutFlag(t *testing.T) {
 	}
 }
 
+func TestParseDiffCutoffWithFlag(t *testing.T) {
+	diffSince = "2d"
+	t.Cleanup(func() { diffSince = "" })
+
+	before := time.Now()
+	has, cutoff, err := parseDiffCutoff()
+	after := time.Now()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !has {
+		t.Fatal("hasSince must be true when --since was given")
+	}
+	// The cutoff is two days back from whenever "now" was read, so it must
+	// land inside the window the call itself spanned, shifted back 48h.
+	earliest := before.Add(-48 * time.Hour)
+	latest := after.Add(-48 * time.Hour)
+	if cutoff.Before(earliest) || cutoff.After(latest) {
+		t.Errorf("cutoff = %v, want within [%v, %v]", cutoff, earliest, latest)
+	}
+}
+
