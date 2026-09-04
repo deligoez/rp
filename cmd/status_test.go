@@ -37,3 +37,42 @@ func TestNeedsAttention(t *testing.T) {
 	}
 }
 
+func TestStatusDetails(t *testing.T) {
+	cases := []struct {
+		name   string
+		status git.RepoStatus
+		want   string
+	}{
+		{"clean", git.RepoStatus{Branch: "main", Clean: true, HasUpstream: true}, "main"},
+		{"dirty", git.RepoStatus{Branch: "main", DirtyFiles: 3, HasUpstream: true}, "main ~3 dirty"},
+		{"ahead", git.RepoStatus{Branch: "main", Clean: true, HasUpstream: true, Ahead: 2}, "main +2 ahead"},
+		{"behind", git.RepoStatus{Branch: "main", Clean: true, HasUpstream: true, Behind: 4}, "main -4 behind"},
+		{"diverged", git.RepoStatus{Branch: "dev", Clean: true, HasUpstream: true, Ahead: 1, Behind: 2}, "dev +1 ahead -2 behind"},
+		{"everything", git.RepoStatus{Branch: "dev", DirtyFiles: 1, HasUpstream: true, Ahead: 1, Behind: 1}, "dev ~1 dirty +1 ahead -1 behind"},
+
+		// Without an upstream the counts are meaningless and must not be shown.
+		{"counts hidden without upstream", git.RepoStatus{Branch: "wip", Clean: true, Ahead: 9, Behind: 9}, "wip"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := statusDetails(tc.status); got != tc.want {
+				t.Errorf("statusDetails = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// jsonRepo builds a statusRepoJSON for a cloned repo with the given counts.
+func jsonRepo(repo string, clean bool, dirty, ahead, behind int, upstream bool) statusRepoJSON {
+	return statusRepoJSON{
+		Repo:        repo,
+		Cloned:      true,
+		Clean:       &clean,
+		DirtyFiles:  &dirty,
+		Ahead:       &ahead,
+		Behind:      &behind,
+		HasUpstream: &upstream,
+	}
+}
+
