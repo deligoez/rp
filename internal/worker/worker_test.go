@@ -431,3 +431,26 @@ func TestPoolWithProgressStaysSilentWithoutVerb(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressStaysSilentOnEmptyItems(t *testing.T) {
+	withTerminal(t)
+
+	out := captureStderr(t, func() {
+		PoolWithProgress(nil, 2, PoolOptions{Verb: "cloning"}, func(int) (int, error) {
+			return 0, nil
+		})
+	})
+
+	if out != "" {
+		t.Errorf("no items means nothing to draw, got %q", out)
+	}
+}
+
+// withTerminalWidth makes the pool see a terminal of the given width, or an
+// unreadable one when err is non-nil.
+func withTerminalWidth(t *testing.T, width int, err error) {
+	t.Helper()
+	prev := stderrWidth
+	stderrWidth = func() (int, error) { return width, err }
+	t.Cleanup(func() { stderrWidth = prev })
+}
+
