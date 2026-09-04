@@ -188,3 +188,13 @@ func TestResolveOwnerReposMixedCollectsDepth1UnderRepos(t *testing.T) {
 	}
 }
 
+func TestResolveOwnerReposEmpty(t *testing.T) {
+	repos, isFlat := resolveOwnerRepos("acme", nil, nil)
+
+	if isFlat {
+		t.Error("an owner with no repos must not be reported as flat")
+	}
+	if len(repos) != 0 {
+		t.Errorf("got %d repos, want none", len(repos))
+	}
+}
