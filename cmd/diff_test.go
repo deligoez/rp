@@ -122,3 +122,30 @@ func loadManifest(t *testing.T, body string) *manifest.Manifest {
 	return m
 }
 
+func TestDiffOwnerLookupMapsEveryRepo(t *testing.T) {
+	m := loadManifest(t, `
+base_dir: /base
+acme:
+  services:
+    - repo: acme/api
+    - repo: acme/web
+solo:
+  - repo: solo/tool
+`)
+
+	byRepo := diffOwnerLookup(m)
+
+	if len(byRepo) != 3 {
+		t.Fatalf("lookup has %d entries, want 3", len(byRepo))
+	}
+	for repo, owner := range map[string]string{
+		"acme/api":  "acme",
+		"acme/web":  "acme",
+		"solo/tool": "solo",
+	} {
+		if got := byRepo[repo].Name; got != owner {
+			t.Errorf("owner of %q = %q, want %q", repo, got, owner)
+		}
+	}
+}
+
