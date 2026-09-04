@@ -269,3 +269,38 @@ func TestPoolWithLiveLogNilCallback(t *testing.T) {
 	}
 }
 
+func TestPoolWithLiveLogCapturesPerItemErrors(t *testing.T) {
+	items := []int{0, 1, 2, 3}
+	boom := errors.New("boom")
+	var mu sync.Mutex
+	errsSeen := 0
+
+	results := PoolWithLiveLog(items, 2,
+		func(v int) (int, error) {
+			if v%2 == 1 {
+				return 0, boom
+			}
+			return v, nil
+		},
+		func(_, _, _, _ int, err error) {
+			if err != nil {
+				mu.Lock()
+				errsSeen++
+				mu.Unlock()
+			}
+		},
+	)
+
+	if errsSeen != 2 {
+		t.Errorf("callback saw %d errors, want 2", errsSeen)
+	}
+	for i, r := range results {
+		if i%2 == 1 && !errors.Is(r.Err, boom) {
+			t.Errorf("results[%d].Err = %v, want boom", i, r.Err)
+		}
+		if i%2 == 0 && r.Err != nil {
+			t.Errorf("results[%d].Err = %v, want nil", i, r.Err)
+		}
+	}
+}
+
