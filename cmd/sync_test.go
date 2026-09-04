@@ -93,3 +93,50 @@ func TestSyncSkipUnsafeDryRunReportsWouldSkip(t *testing.T) {
 	}
 }
 
+func TestSetSyncSkipReason(t *testing.T) {
+	cases := []struct {
+		name       string
+		result     syncResult
+		wantReason string
+		check      func(t *testing.T, rj syncRepoJSON)
+	}{
+		{
+			name:       "dirty carries the file count",
+			result:     syncResult{skipReason: syncSkipDirty, dirtyFiles: 4},
+			wantReason: "dirty",
+			check: func(t *testing.T, rj syncRepoJSON) {
+				if rj.DirtyFiles != 4 {
+					t.Errorf("DirtyFiles = %d, want 4", rj.DirtyFiles)
+				}
+			},
+		},
+		{
+			name:       "unpushed carries ahead and branch",
+			result:     syncResult{skipReason: syncSkipUnpushed, ahead: 2, branch: "main"},
+			wantReason: "unpushed",
+			check: func(t *testing.T, rj syncRepoJSON) {
+				if rj.Ahead != 2 || rj.Branch != "main" {
+					t.Errorf("Ahead/Branch = %d/%q, want 2/main", rj.Ahead, rj.Branch)
+				}
+			},
+		},
+		{name: "diverged", result: syncResult{skipReason: syncSkipDiverged}, wantReason: "diverged"},
+		{name: "no upstream", result: syncResult{skipReason: syncSkipNoUpstream}, wantReason: "no_upstream"},
+		{name: "not a repo", result: syncResult{skipReason: syncSkipNotARepo}, wantReason: "not_a_repo"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var rj syncRepoJSON
+			setSyncSkipReason(&rj, tc.result)
+
+			if rj.Reason != tc.wantReason {
+				t.Errorf("Reason = %q, want %q", rj.Reason, tc.wantReason)
+			}
+			if tc.check != nil {
+				tc.check(t, rj)
+			}
+		})
+	}
+}
+
