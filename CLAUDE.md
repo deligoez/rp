@@ -43,7 +43,7 @@ go test ./...
 go vet ./...
 
 # Quality gate (run after every change)
-go build ./... && go test ./... && golangci-lint run && ./scripts/deadcode.sh
+go build ./... && go test -race ./... && golangci-lint run && ./scripts/deadcode.sh
 ```
 
 ## Tooling beyond the gate
@@ -85,6 +85,33 @@ Both run in CI. `golangci-lint` includes `govet`, so a separate `go vet` step is
 - **Do not add a `//nolint` to get the gate green.** Every current finding was refactored
   away rather than suppressed, so the gate is at a true zero and the next violation is
   visible the moment it appears.
+- **`-race` is in the gate, and `-count=1` with it.** `internal/worker` documents that it
+  serialises the live-log callback; the test proving it only fails under the race detector,
+  so without `-race` that guarantee is unenforced. Measured cost is +2s, because the slow
+  package waits on subprocesses rather than computing. `-count=1` is needed because
+  `actions/setup-go` restores the build cache, which carries cached test results.
+
+## Mutation testing (not a gate, but cheap here)
+
+`gremlins unleash --workers 4 --timeout-coefficient 50 ./internal/<pkg>` finishes in about
+ten seconds per package, because every `internal/*` suite runs in under a second. Current
+state: `worker` 100%, `git` 100%, `runner` 100%, `ui` 85.7%, `manifest` 86.5% — every
+survivor in the last two is a verified equivalent mutant (`PadRight`'s `>=`/`>` at the
+boundary, and the `i+1 < len(node.Content)` YAML pair-walk, where `Content` always has even
+length). Re-verify a survivor by applying the mutation and running the tests before calling
+it equivalent.
+
+- **`cmd` cannot be measured this way**: its tests drive the built binary as a subprocess, so
+  in-process coverage is near zero (8 runnable vs 366 not covered). That is a measurement
+  limit, not a coverage gap — but it does mean there is no unit-level safety net there, which
+  is why a behaviour-pinning test comes before any refactor of `cmd`.
+- **Never pass `--test-cpu`**: gremlins passes it to `exec.Command` as one argument, `go test`
+  fails to start, and every mutant is scored KILLED. The tell is `Lived: 0` beside a non-zero
+  `Not covered` — an exhaustive suite can honestly report `Lived: 0`, but not next to
+  uncovered mutants, because coverage is collected before mutants run.
+- **Scan the timeout coefficient until the result stops moving.** At 10 this suite reported 20
+  of 24 mutants as TIMED OUT in `internal/git`; at 50 and 200 the same mutants are KILLED. A
+  run with many timeouts is not trustworthy in either direction.
 
 ## Commands
 
