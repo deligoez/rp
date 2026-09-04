@@ -51,3 +51,20 @@ func TestParseDiffDuration(t *testing.T) {
 	}
 }
 
+func TestParseDiffCutoffWithoutFlag(t *testing.T) {
+	diffSince = ""
+	t.Cleanup(func() { diffSince = "" })
+
+	has, cutoff, err := parseDiffCutoff()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if has {
+		t.Error("hasSince must be false when --since was not given")
+	}
+	if !cutoff.IsZero() {
+		t.Errorf("cutoff = %v, want the zero time when unused", cutoff)
+	}
+}
+
