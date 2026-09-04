@@ -167,3 +167,24 @@ func TestResolveOwnerReposCategorized(t *testing.T) {
 	}
 }
 
+func TestResolveOwnerReposMixedCollectsDepth1UnderRepos(t *testing.T) {
+	depth1 := []scannedRepo{{repoName: "loose"}}
+	depth2 := []scannedRepo{{repoName: "api", category: "svc"}}
+
+	repos, isFlat := resolveOwnerRepos("acme", depth1, depth2)
+
+	if isFlat {
+		t.Error("a mixed owner is categorized, not flat")
+	}
+	if len(repos) != 2 {
+		t.Fatalf("got %d repos, want both depths merged", len(repos))
+	}
+	// depth2 first, then the relocated depth-1 repos.
+	if repos[0].category != "svc" {
+		t.Errorf("repos[0].category = %q, want %q", repos[0].category, "svc")
+	}
+	if repos[1].category != "repos" {
+		t.Errorf("depth-1 repo landed in %q, want the \"repos\" category", repos[1].category)
+	}
+}
+
