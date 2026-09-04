@@ -58,3 +58,13 @@ func TestPadRightPadsToWidth(t *testing.T) {
 	}
 }
 
+func TestPadRightLeavesLongerStringsAlone(t *testing.T) {
+	// Equal length must not gain a space either — the boundary matters for
+	// column alignment.
+	for _, width := range []int{0, 2, 3} {
+		if got := PadRight("abc", width); got != "abc" {
+			t.Errorf("PadRight(%q, %d) = %q, want %q unchanged", "abc", width, got, "abc")
+		}
+	}
+}
+
