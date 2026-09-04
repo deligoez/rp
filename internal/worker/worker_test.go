@@ -253,3 +253,19 @@ func TestPoolWithLiveLogSerializesCallback(t *testing.T) {
 	}
 }
 
+func TestPoolWithLiveLogNilCallback(t *testing.T) {
+	results := PoolWithLiveLog(make([]int, 4), 2,
+		func(int) (int, error) { return 7, nil },
+		nil,
+	)
+
+	if len(results) != 4 {
+		t.Fatalf("len(results) = %d, want 4", len(results))
+	}
+	for i, r := range results {
+		if r.Value != 7 {
+			t.Errorf("results[%d].Value = %d, want 7", i, r.Value)
+		}
+	}
+}
+
