@@ -397,3 +397,23 @@ func TestClearLineFallsBackWhenWidthUnknown(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressDrawsProgressOnTerminal(t *testing.T) {
+	withTerminal(t)
+
+	out := captureStderr(t, func() {
+		PoolWithProgress(make([]int, 3), 1, PoolOptions{Verb: "cloning"}, func(int) (int, error) {
+			return 0, nil
+		})
+	})
+
+	// One line before any work, then one per completed item.
+	for _, want := range []string{"[0/3] cloning...", "[1/3] cloning...", "[3/3] cloning..."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("progress output missing %q, got %q", want, out)
+		}
+	}
+	if !strings.HasSuffix(out, "\r") {
+		t.Errorf("progress output must end by clearing the line, got %q", out)
+	}
+}
+
