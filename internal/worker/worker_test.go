@@ -237,3 +237,19 @@ func TestPoolWithLiveLogNumbersCompletions(t *testing.T) {
 	}
 }
 
+func TestPoolWithLiveLogSerializesCallback(t *testing.T) {
+	// The callback deliberately uses an unguarded counter: the pool documents
+	// that it holds a mutex around onComplete, so callers may touch shared
+	// state. Under -race this fails loudly if that guarantee is dropped.
+	unguarded := 0
+
+	PoolWithLiveLog(make([]int, 50), 8,
+		func(int) (int, error) { return 0, nil },
+		func(int, int, int, int, error) { unguarded++ },
+	)
+
+	if unguarded != 50 {
+		t.Errorf("callback ran %d times, want 50", unguarded)
+	}
+}
+
