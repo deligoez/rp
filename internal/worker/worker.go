@@ -24,6 +24,35 @@ type PoolOptions struct {
 	Verb string
 }
 
+// stderrIsTerminal reports whether there is a terminal to draw progress on.
+// It is a variable so tests can reach the progress path, which is otherwise
+// dead under `go test` because stderr is a pipe there.
+var stderrIsTerminal = func() bool { return term.IsTerminal(os.Stderr.Fd()) }
+
+// stderrWidth reports the terminal's column count. Like stderrIsTerminal it is
+// a variable so tests can drive both outcomes; a pipe has no width, so the
+// error branch is all a test would otherwise ever see.
+var stderrWidth = func() (int, error) {
+	width, _, err := term.GetSize(os.Stderr.Fd())
+	return width, err
+}
+
+// progressLine renders the in-place progress indicator. The leading carriage
+// return rewinds to the start of the line so the indicator overwrites itself
+// instead of scrolling.
+func progressLine(done, total int, verb string) string {
+	return fmt.Sprintf("\r[%d/%d] %s...", done, total, verb)
+}
+
+// clearLine renders the sequence that blanks a progress line of the given
+// width. A width that could not be determined falls back to 80 columns.
+func clearLine(width int) string {
+	if width <= 0 {
+		width = 80
+	}
+	return "\r" + strings.Repeat(" ", width) + "\r"
+}
+
 // PoolWithProgress runs fn for each item in items with the given concurrency
 // and optionally streams a live progress indicator to stderr.
 //
@@ -37,14 +66,12 @@ func PoolWithProgress[T any, R any](items []T, concurrency int, opts PoolOptions
 	results := make([]Result[R], len(items))
 	total := len(items)
 
-	showProgress := opts.Verb != "" && term.IsTerminal(os.Stderr.Fd())
+	showProgress := opts.Verb != "" && stderrIsTerminal()
 
 	var done atomic.Int64
 
 	printProgress := func() {
-		n := done.Load()
-		line := fmt.Sprintf("\r[%d/%d] %s...", n, total, opts.Verb)
-		fmt.Fprint(os.Stderr, line)
+		fmt.Fprint(os.Stderr, progressLine(int(done.Load()), total, opts.Verb))
 	}
 
 	if showProgress && total > 0 {
@@ -73,11 +100,11 @@ func PoolWithProgress[T any, R any](items []T, concurrency int, opts PoolOptions
 
 	if showProgress && total > 0 {
 		// Clear the progress line.
-		width, _, err := term.GetSize(os.Stderr.Fd())
-		if err != nil || width <= 0 {
-			width = 80
+		width, err := stderrWidth()
+		if err != nil {
+			width = 0 // clearLine falls back to a conventional width
 		}
-		fmt.Fprint(os.Stderr, "\r"+strings.Repeat(" ", width)+"\r")
+		fmt.Fprint(os.Stderr, clearLine(width))
 	}
 	return results
 }
