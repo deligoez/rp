@@ -140,3 +140,11 @@ func TestSetSyncSkipReason(t *testing.T) {
 	}
 }
 
+func TestSetSyncSkipReasonLeavesNonSkipsAlone(t *testing.T) {
+	var rj syncRepoJSON
+	setSyncSkipReason(&rj, syncResult{skipReason: syncSkipNone})
+
+	if rj.Reason != "" {
+		t.Errorf("Reason = %q, want it left empty when there is no skip", rj.Reason)
+	}
+}
