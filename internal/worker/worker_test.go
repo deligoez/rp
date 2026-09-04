@@ -454,3 +454,18 @@ func withTerminalWidth(t *testing.T, width int, err error) {
 	t.Cleanup(func() { stderrWidth = prev })
 }
 
+func TestPoolWithProgressClearsToTerminalWidth(t *testing.T) {
+	withTerminal(t)
+	withTerminalWidth(t, 12, nil)
+
+	out := captureStderr(t, func() {
+		PoolWithProgress(make([]int, 1), 1, PoolOptions{Verb: "syncing"}, func(int) (int, error) {
+			return 0, nil
+		})
+	})
+
+	if !strings.HasSuffix(out, clearLine(12)) {
+		t.Errorf("expected the line to be cleared to 12 columns, got %q", out)
+	}
+}
+
