@@ -95,23 +95,53 @@ Both run in CI. `golangci-lint` includes `govet`, so a separate `go vet` step is
 
 `gremlins unleash --workers 4 --timeout-coefficient 50 ./internal/<pkg>` finishes in about
 ten seconds per package, because every `internal/*` suite runs in under a second. Current
-state: `worker` 100%, `git` 100%, `runner` 100%, `ui` 85.7%, `manifest` 86.5% — every
-survivor in the last two is a verified equivalent mutant (`PadRight`'s `>=`/`>` at the
-boundary, and the `i+1 < len(node.Content)` YAML pair-walk, where `Content` always has even
-length). Re-verify a survivor by applying the mutation and running the tests before calling
-it equivalent.
+state:
 
-- **`cmd` cannot be measured this way**: its tests drive the built binary as a subprocess, so
-  in-process coverage is near zero (8 runnable vs 366 not covered). That is a measurement
-  limit, not a coverage gap — but it does mean there is no unit-level safety net there, which
-  is why a behaviour-pinning test comes before any refactor of `cmd`.
+| package | efficacy | survivors |
+|---|---|---|
+| `internal/worker` | 100% | — |
+| `internal/git` | 100% | — |
+| `internal/runner` | 100% | — |
+| `cmd` | 98.7% | 1, equivalent |
+| `internal/manifest` | 86.5% | 10, all equivalent |
+| `internal/ui` | 85.7% | 1, equivalent |
+
+Every survivor is a verified equivalent mutant: `PadRight`'s and `statusLabelWidth`'s `>`/`>=`
+at the boundary, where both branches assign the same value, and the
+`i+1 < len(node.Content)` YAML pair-walk, where `Content` always has even length. **Apply a
+survivor's mutation by hand and run the tests before calling it equivalent** — one that looked
+equivalent (`make([]T, 0, len(a)+len(b))`, where capacity is only a hint) turned out to panic
+when `len(b) > len(a)` drives the capacity negative, and a test with an uneven split kills it.
+
+- **`cmd` is only partly measurable**: its tests mostly drive the built binary as a
+  subprocess, which in-process coverage cannot see. Unit tests for the pure helpers took it
+  from 8 runnable / 366 not covered to 74 / 300, but the command bodies themselves stay out of
+  reach. That is a measurement limit for those 300 — and it is also why a behaviour-pinning
+  test comes before any refactor of a command body.
+- **Run `go clean -testcache` first, and check the baseline.** gremlins derives its per-mutant
+  timeout from a baseline `go test`, and that run can hit the build cache. A cached baseline
+  is ~0, so the timeout is ~0, so mutants mass-report TIMED OUT — which counts as "not
+  survived", and efficacy reads a false 100%. Measured here on `./cmd`: `Gathering
+  coverage... done in 186ms` against a suite that really takes 73s, 63 false timeouts,
+  efficacy 100%, whole run in 16s. With a cold cache the same run reports 1m12s of coverage
+  gathering, 0 timeouts, and 93.24%.
+
+  **The first thing to check on any run is that "Gathering coverage" took about as long as a
+  cold `go test` of that package.** It measures the quantity that breaks, rather than a
+  consequence of it, and it does not depend on how uniform the package's tests are.
 - **Never pass `--test-cpu`**: gremlins passes it to `exec.Command` as one argument, `go test`
-  fails to start, and every mutant is scored KILLED. The tell is `Lived: 0` beside a non-zero
-  `Not covered` — an exhaustive suite can honestly report `Lived: 0`, but not next to
-  uncovered mutants, because coverage is collected before mutants run.
+  fails to start, and every mutant is scored KILLED. A second tell for both this and the
+  cached baseline: `Lived: 0` beside a non-zero `Not covered` — an exhaustive suite can
+  honestly report `Lived: 0`, but not next to uncovered mutants, because coverage is
+  collected before mutants run.
 - **Scan the timeout coefficient until the result stops moving.** At 10 this suite reported 20
   of 24 mutants as TIMED OUT in `internal/git`; at 50 and 200 the same mutants are KILLED. A
   run with many timeouts is not trustworthy in either direction.
+- **Wall-clock arithmetic is an upper bound, not a verdict.** `runnable × suite ÷ workers`
+  assumes every test in the package costs the same. `cmd` breaks that assumption badly — its
+  unit tests take 1.5s and its subprocess integration tests 72s — so a healthy run finished in
+  2m36s where the formula predicted 22m. A run shorter than the estimate is a question, and
+  the coverage-gathering time answers it.
 
 ## Commands
 
