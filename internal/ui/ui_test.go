@@ -68,3 +68,18 @@ func TestPadRightLeavesLongerStringsAlone(t *testing.T) {
 	}
 }
 
+func TestSymbolsAreBareTextWithoutColor(t *testing.T) {
+	withColor(t, false)
+
+	cases := map[string]func() string{
+		"OK": SymbolOK,
+		"!!": SymbolWarn,
+		"XX": SymbolError,
+	}
+	for want, symbol := range cases {
+		if got := symbol(); got != want {
+			t.Errorf("symbol = %q, want the bare %q with color disabled", got, want)
+		}
+	}
+}
+
