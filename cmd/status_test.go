@@ -76,3 +76,12 @@ func jsonRepo(repo string, clean bool, dirty, ahead, behind int, upstream bool) 
 	}
 }
 
+func TestStatusPassesFiltersWithNoFlags(t *testing.T) {
+	if !statusPassesFilters(jsonRepo("a/b", true, 0, 0, 0, true)) {
+		t.Error("with no flags set every repo must pass")
+	}
+	if !statusPassesFilters(statusRepoJSON{Repo: "a/b", Cloned: false}) {
+		t.Error("an uncloned repo must pass when no flags are set")
+	}
+}
+
