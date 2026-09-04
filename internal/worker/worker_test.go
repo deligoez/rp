@@ -304,3 +304,68 @@ func TestPoolWithLiveLogCapturesPerItemErrors(t *testing.T) {
 	}
 }
 
+func TestPoolWithLiveLogBoundsConcurrency(t *testing.T) {
+	const limit = 4
+	var m maxInFlight
+	var wg sync.WaitGroup
+	wg.Add(24)
+
+	PoolWithLiveLog(make([]int, 24), limit,
+		func(int) (int, error) {
+			m.enter()
+			defer m.leave()
+			wg.Done()
+			return 0, nil
+		},
+		nil,
+	)
+
+	if peak := m.peak.Load(); peak > limit {
+		t.Errorf("peak concurrency = %d, want <= %d", peak, limit)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Progress rendering
+//
+// The progress path is TTY-gated, so under `go test` it is unreachable unless
+// stderrIsTerminal is stubbed. These tests do that, and capture os.Stderr to
+// assert on what the pool actually draws.
+// ---------------------------------------------------------------------------
+
+// withTerminal makes the pool believe stderr is a terminal for one test.
+func withTerminal(t *testing.T) {
+	t.Helper()
+	prev := stderrIsTerminal
+	stderrIsTerminal = func() bool { return true }
+	t.Cleanup(func() { stderrIsTerminal = prev })
+}
+
+// captureStderr runs fn with os.Stderr replaced by a pipe and returns what was
+// written to it.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	prev := os.Stderr
+	os.Stderr = w
+
+	captured := make(chan string, 1)
+	go func() {
+		var sb strings.Builder
+		_, _ = io.Copy(&sb, r)
+		captured <- sb.String()
+	}()
+
+	fn()
+
+	os.Stderr = prev
+	if err := w.Close(); err != nil {
+		t.Fatalf("close pipe: %v", err)
+	}
+	return <-captured
+}
+
