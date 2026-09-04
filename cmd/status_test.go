@@ -197,3 +197,20 @@ func TestStatusLabelWidthGrowsForLongLabels(t *testing.T) {
 	}
 }
 
+func TestRepoLabel(t *testing.T) {
+	cases := []struct {
+		entry manifest.RepoEntry
+		want  string
+	}{
+		{manifest.RepoEntry{Repo: "acme/api", Category: "services"}, "services/api"},
+		{manifest.RepoEntry{Repo: "acme/api"}, "api"},
+		{manifest.RepoEntry{Repo: "noslash"}, "noslash"},
+		{manifest.RepoEntry{Repo: "a/b/c"}, "b/c"},
+	}
+
+	for _, tc := range cases {
+		if got := repoLabel(tc.entry); got != tc.want {
+			t.Errorf("repoLabel(%+v) = %q, want %q", tc.entry, got, tc.want)
+		}
+	}
+}
