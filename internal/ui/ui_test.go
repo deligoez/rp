@@ -101,3 +101,19 @@ func TestSymbolsAreWrappedWithColor(t *testing.T) {
 	}
 }
 
+func TestSetNoColorTogglesStyling(t *testing.T) {
+	prev := noColor
+	t.Cleanup(func() { noColor = prev })
+
+	SetNoColor(true)
+	bare := SymbolOK()
+	SetNoColor(false)
+	colored := SymbolOK()
+
+	if bare != "OK" {
+		t.Errorf("with --no-color the symbol must be bare, got %q", bare)
+	}
+	if !strings.Contains(colored, "OK") {
+		t.Errorf("with color enabled the symbol must still carry its text, got %q", colored)
+	}
+}
