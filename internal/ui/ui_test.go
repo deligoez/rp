@@ -20,3 +20,17 @@ func TestPluralUsesSingularForOne(t *testing.T) {
 	}
 }
 
+func TestPluralAddsSuffixForEveryOtherCount(t *testing.T) {
+	cases := map[int]string{
+		0:  "0 commits",
+		2:  "2 commits",
+		42: "42 commits",
+		-1: "-1 commits",
+	}
+	for count, want := range cases {
+		if got := Plural(count, "commit"); got != want {
+			t.Errorf("Plural(%d, %q) = %q, want %q", count, "commit", got, want)
+		}
+	}
+}
+
