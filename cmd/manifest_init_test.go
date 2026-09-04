@@ -92,3 +92,21 @@ func TestInferOwnerDirFallsBackToTheParent(t *testing.T) {
 	}
 }
 
+func TestInferOwnerDirStopsAtTheScanRoot(t *testing.T) {
+	// A directory above the scan root shares the owner's name; the walk must
+	// not reach it, because --dir is the boundary of the scan.
+	// A directory named after the owner sits above the scan root.
+	base := filepath.Join(t.TempDir(), "acme")
+	root := filepath.Join(base, "root")
+	repo := filepath.Join(root, "projects", "tool")
+
+	got, found := inferOwnerDir(repo, root, "acme")
+
+	if found {
+		t.Error("the walk must not climb above the scan root")
+	}
+	if want := filepath.Join(root, "projects"); got != want {
+		t.Errorf("inferOwnerDir = %q, want %q", got, want)
+	}
+}
+
