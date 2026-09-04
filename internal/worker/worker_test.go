@@ -102,3 +102,26 @@ func TestPoolWithProgressCapturesPerItemErrors(t *testing.T) {
 	}
 }
 
+func TestPoolWithProgressBoundsConcurrency(t *testing.T) {
+	const limit = 3
+	var m maxInFlight
+	var wg sync.WaitGroup
+	wg.Add(20)
+
+	// Every call blocks until all 20 have been started, so the pool cannot
+	// finish one before the peak is observed.
+	results := PoolWithProgress(make([]int, 20), limit, PoolOptions{}, func(int) (int, error) {
+		m.enter()
+		defer m.leave()
+		wg.Done()
+		return 0, nil
+	})
+
+	if len(results) != 20 {
+		t.Fatalf("len(results) = %d, want 20", len(results))
+	}
+	if peak := m.peak.Load(); peak > limit {
+		t.Errorf("peak concurrency = %d, want <= %d", peak, limit)
+	}
+}
+
