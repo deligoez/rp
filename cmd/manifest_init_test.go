@@ -51,3 +51,17 @@ func TestInferOwnerDirFindsAncestorByName(t *testing.T) {
 	}
 }
 
+func TestInferOwnerDirMatchesCaseInsensitively(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "Deligoez", "rp")
+
+	got, found := inferOwnerDir(repo, root, "deligoez")
+
+	if !found {
+		t.Error("expected a case-insensitive match on the owner directory")
+	}
+	if want := filepath.Join(root, "Deligoez"); got != want {
+		t.Errorf("inferOwnerDir = %q, want %q", got, want)
+	}
+}
+
