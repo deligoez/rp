@@ -160,11 +160,22 @@ func Execute() {
 	}
 }
 
-func init() {
-	if version == "dev" {
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-			version = info.Main.Version
-		}
+// resolveVersion picks the version to report. A version stamped in at build
+// time via ldflags always wins; otherwise the module version recorded in the
+// binary is used, when the build actually carries one. A `go run` or a local
+// `go build` records "(devel)" or nothing, which is no better than "dev".
+func resolveVersion(stamped string, info *debug.BuildInfo, ok bool) string {
+	if stamped != "dev" {
+		return stamped
 	}
+	if !ok || info.Main.Version == "" || info.Main.Version == "(devel)" {
+		return stamped
+	}
+	return info.Main.Version
+}
+
+func init() {
+	info, ok := debug.ReadBuildInfo()
+	version = resolveVersion(version, info, ok)
 	rootCmd.Version = version
 }
