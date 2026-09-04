@@ -149,3 +149,10 @@ solo:
 	}
 }
 
+func TestDiffPluralRepos(t *testing.T) {
+	for n, want := range map[int]string{0: "repos", 1: "repo", 2: "repos"} {
+		if got := diffPluralRepos(n); got != want {
+			t.Errorf("diffPluralRepos(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
