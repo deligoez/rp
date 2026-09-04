@@ -177,3 +177,13 @@ func TestFilterStatusLinesPairsRowsWithJSONByIndex(t *testing.T) {
 	}
 }
 
+func TestStatusLabelWidthHasAFloor(t *testing.T) {
+	owners := []manifest.OwnerGroup{
+		{Name: "o", Repos: []manifest.RepoEntry{{Repo: "o/x"}}},
+	}
+
+	if got := statusLabelWidth(owners); got != 24 {
+		t.Errorf("statusLabelWidth = %d, want the 24-column floor for short labels", got)
+	}
+}
+
