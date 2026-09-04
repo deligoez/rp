@@ -136,3 +136,21 @@ func TestSplitReposByDepth(t *testing.T) {
 	}
 }
 
+func TestResolveOwnerReposFlat(t *testing.T) {
+	depth1 := []scannedRepo{{repoName: "a", category: "stale"}, {repoName: "b"}}
+
+	repos, isFlat := resolveOwnerRepos("acme", depth1, nil)
+
+	if !isFlat {
+		t.Error("an owner with only depth-1 repos is flat")
+	}
+	if len(repos) != 2 {
+		t.Fatalf("got %d repos, want 2", len(repos))
+	}
+	for _, r := range repos {
+		if r.category != "" {
+			t.Errorf("flat repo %q kept category %q, want it cleared", r.repoName, r.category)
+		}
+	}
+}
+
