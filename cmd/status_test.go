@@ -125,3 +125,26 @@ func TestStatusPassesFiltersAheadAndBehind(t *testing.T) {
 	}
 }
 
+func TestCountStatusJSON(t *testing.T) {
+	repos := []statusRepoJSON{
+		jsonRepo("ok/one", true, 0, 0, 0, true),
+		jsonRepo("ok/two", true, 0, 0, 0, false),
+		jsonRepo("dirty/one", false, 1, 0, 0, true),
+		jsonRepo("ahead/one", true, 0, 2, 0, true),
+		jsonRepo("behind/one", true, 0, 0, 3, true),
+		{Repo: "missing/one", Cloned: false},
+	}
+
+	ok, attention, notCloned := countStatusJSON(repos)
+
+	if ok != 2 {
+		t.Errorf("ok = %d, want 2", ok)
+	}
+	if attention != 3 {
+		t.Errorf("attention = %d, want 3", attention)
+	}
+	if notCloned != 1 {
+		t.Errorf("notCloned = %d, want 1", notCloned)
+	}
+}
+
