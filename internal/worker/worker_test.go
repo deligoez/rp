@@ -163,23 +163,43 @@ func TestPoolWithProgressEmptyItems(t *testing.T) {
 // PoolWithLiveLog
 // ---------------------------------------------------------------------------
 
+// reverseCallbackFinisher forces the *callbacks* to fire in reverse item
+// order: item i's fn blocks until item i+1's callback has run.
+//
+// Gating on fn alone is not enough. The callback runs after fn returns and
+// takes a lock to do it, so two goroutines whose fns finished in order can
+// still reach the callback in either order — which is exactly the flake this
+// replaces.
+func reverseCallbackFinisher(n int) (waitFor, signal func(i int)) {
+	done := make([]chan struct{}, n)
+	for i := range done {
+		done[i] = make(chan struct{})
+	}
+	return func(i int) {
+			if i+1 < n {
+				<-done[i+1]
+			}
+		}, func(i int) {
+			close(done[i])
+		}
+}
+
 func TestPoolWithLiveLogPreservesItemOrder(t *testing.T) {
 	const n = 5
 	items := []int{10, 20, 30, 40, 50}
-	finish := reverseFinisher(n)
+	waitFor, signal := reverseCallbackFinisher(n)
 
-	var mu sync.Mutex
+	// The pool serialises onComplete, so this needs no lock of its own.
 	var completionOrder []int
 
 	results := PoolWithLiveLog(items, n,
 		func(v int) (int, error) {
-			finish(v/10 - 1)
+			waitFor(v/10 - 1)
 			return v * 2, nil
 		},
 		func(_, _ int, item, _ int, _ error) {
-			mu.Lock()
 			completionOrder = append(completionOrder, item)
-			mu.Unlock()
+			signal(item/10 - 1)
 		},
 	)
 
