@@ -34,3 +34,11 @@ func TestPluralAddsSuffixForEveryOtherCount(t *testing.T) {
 	}
 }
 
+func TestSummaryLineJoinsPartsUnderHeader(t *testing.T) {
+	got := SummaryLine("3 OK", "1 failed")
+	want := "-- Summary --\n3 OK\n1 failed"
+	if got != want {
+		t.Errorf("SummaryLine = %q, want %q", got, want)
+	}
+}
+
