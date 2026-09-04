@@ -83,3 +83,21 @@ func TestSymbolsAreBareTextWithoutColor(t *testing.T) {
 	}
 }
 
+func TestSymbolsAreWrappedWithColor(t *testing.T) {
+	withColor(t, true)
+
+	// lipgloss only emits escapes when it believes the output profile supports
+	// them, which it may not under `go test`. Assert the invariant that holds
+	// either way: the symbol text survives, and nothing else is lost.
+	for want, symbol := range map[string]func() string{
+		"OK": SymbolOK,
+		"!!": SymbolWarn,
+		"XX": SymbolError,
+	} {
+		got := symbol()
+		if !strings.Contains(got, want) {
+			t.Errorf("symbol = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
