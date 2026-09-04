@@ -67,3 +67,13 @@ func TestSyncSkipUnsafePrefersDirtyOverUnpushed(t *testing.T) {
 	}
 }
 
+func TestSyncSkipUnsafeIgnoresAheadWithoutUpstream(t *testing.T) {
+	// Without an upstream there is nothing to be ahead of, so the repo is not
+	// holding unpushed work in any meaningful sense.
+	s := git.RepoStatus{Clean: true, Ahead: 7, Branch: "wip"}
+
+	if _, skip := syncSkipUnsafe(s, "label", "a/b", false); skip {
+		t.Error("ahead without an upstream must not trigger a skip")
+	}
+}
+
