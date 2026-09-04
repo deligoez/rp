@@ -85,3 +85,19 @@ func TestStatusPassesFiltersWithNoFlags(t *testing.T) {
 	}
 }
 
+func TestStatusPassesFiltersDirty(t *testing.T) {
+	statusDirty = true
+	t.Cleanup(func() { statusDirty = false })
+
+	if statusPassesFilters(jsonRepo("a/b", true, 0, 0, 0, true)) {
+		t.Error("--dirty must drop a clean repo")
+	}
+	if !statusPassesFilters(jsonRepo("a/b", false, 2, 0, 0, true)) {
+		t.Error("--dirty must keep a dirty repo")
+	}
+	// An uncloned repo has no Clean pointer at all; it cannot be dirty.
+	if statusPassesFilters(statusRepoJSON{Repo: "a/b"}) {
+		t.Error("--dirty must drop a repo with no recorded state")
+	}
+}
+
