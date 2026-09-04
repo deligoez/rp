@@ -200,3 +200,40 @@ func TestPoolWithLiveLogPreservesItemOrder(t *testing.T) {
 	}
 }
 
+func TestPoolWithLiveLogNumbersCompletions(t *testing.T) {
+	const n = 6
+	var mu sync.Mutex
+	var counters []int
+	totals := map[int]bool{}
+
+	PoolWithLiveLog(make([]int, n), 3,
+		func(int) (int, error) { return 0, nil },
+		func(completed, total int, _, _ int, _ error) {
+			mu.Lock()
+			counters = append(counters, completed)
+			totals[total] = true
+			mu.Unlock()
+		},
+	)
+
+	if len(counters) != n {
+		t.Fatalf("callback fired %d times, want %d", len(counters), n)
+	}
+
+	// completed must be 1..n with no gaps or repeats, whatever the order.
+	seen := make(map[int]bool, n)
+	for _, c := range counters {
+		if c < 1 || c > n {
+			t.Errorf("completed = %d, want between 1 and %d", c, n)
+		}
+		if seen[c] {
+			t.Errorf("completed = %d reported more than once", c)
+		}
+		seen[c] = true
+	}
+
+	if len(totals) != 1 || !totals[n] {
+		t.Errorf("total values seen = %v, want only %d", totals, n)
+	}
+}
+
